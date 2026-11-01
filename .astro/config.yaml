@@ -1,0 +1,6 @@
+api-server:
+    port: "8081"
+postgres:
+    port: "5434"
+project:
+    name: subastas-analytics

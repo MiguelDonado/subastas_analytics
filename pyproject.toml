@@ -1,0 +1,23 @@
+[project]
+name = "subastas-analytics"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "MiguelDonado", email = "miguel.5799@hotmail.es" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=2.1.0",
+    "lxml>=6.1.3",
+    "pydantic>=2.14.1",
+    "python-dotenv>=1.2.4",
+    "requests>=2.34.2",
+]
+
+[project.scripts]
+subastas-analytics = "subastas_analytics:main"
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14.0"]
+build-backend = "uv_build"
