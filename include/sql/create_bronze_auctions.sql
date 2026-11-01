@@ -11,13 +11,13 @@ CREATE SCHEMA IF NOT EXISTS bronze;
 -- -----------------------------------------------------------------------------
 -- auctions: one row per BOE announcement (BOE-B-YYYY-NNNNN)
 -- -----------------------------------------------------------------------------
-CREATE TABLE bronze.auctions (
+CREATE TABLE IF NOT EXISTS bronze.auctions (
     auction_id        BIGINT       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     boe_ref           VARCHAR(30)  NOT NULL UNIQUE,              -- e.g. BOE-B-2026-34259
     announcement_text TEXT         NOT NULL,                     -- full announcement text, as received
     publication_date  DATE         NOT NULL,                     -- BOE publication date
-    ingested_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),       -- load timestamp
-    source_url        TEXT         NOT NULL
+    source_url        TEXT         NOT NULL,
+    ingested_at       TIMESTAMPTZ  NOT NULL DEFAULT now()       -- load timestamp
 );
 
 COMMENT ON TABLE  bronze.auctions IS 'BOE auction announcements, stored as received from the BOE Open Data API.';

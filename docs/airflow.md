@@ -1,12 +1,12 @@
 # Airflow orchestration
 
-How the pipeline is scheduled with Airflow (run through the Astro CLI), and why Airflow is only running for about an hour a week.
+How the pipeline is scheduled with Airflow (run through the Astro CLI), and why Airflow is only running for about two hours a week.
 
 ## Why Airflow only runs once a week
 
 BOE data only needs loading once a week, so keeping Airflow running all the time would use RAM for nothing. This project's Airflow containers use about 1.1 GiB when running, on a laptop with 15 GiB that also runs `cgm-analytics`, which has to stay on because it fetches data hourly.
 
-So a cron job starts Airflow every Monday, gives it one hour to finish, and stops it again. Stopping the containers frees their RAM, and the data stays in Docker volumes.
+So a cron job starts Airflow every Monday, gives it two hours to finish, and stops it again. Stopping the containers frees their RAM, and the data stays in Docker volumes.
 
 ## Weekly flow
 
@@ -15,7 +15,7 @@ So a cron job starts Airflow every Monday, gives it one hour to finish, and stop
 | Monday 00:00 UTC | The DAG's scheduled time passes. Airflow is off, so nothing runs yet. |
 | Monday 10:30 local | Cron runs `scripts/weekly_airflow.sh`, which starts Airflow. |
 | Right after the start | Airflow sees the missed Monday and starts that run (`catchup=True`). |
-| Monday 11:30 local | The script stops Airflow. |
+| Monday 12:30 local | The script stops Airflow. |
 
 ## Cron job
 
@@ -38,9 +38,11 @@ Set in `.astro/config.yaml`, because `cgm-analytics` already uses 8080, 5432 and
 | Airflow UI | 8081 |
 | Airflow metadata Postgres | 5434 |
 
+`subastas-db` is exposed on `localhost:5435`, set in `docker-compose.override.yml`. This mapping is for tools on the laptop, such as `dbeaver`.
+
 ## Where the data lives
 
-**Status: planned.** The project's data should run in its own always-on Postgres container, outside the Astro project, on a shared Docker network. A database defined inside the Astro project would stop along with Airflow, leaving the Shiny app without data for most of the week. Airflow's own Postgres only stores Airflow's metadata.
+The project's data is in its own Postgres container, `subastas-db`, defined in `docker-compose.override.yml` and separate from the Postgres that stores Airflow's metadata. Airflow reaches it through the `subastas_db` connection, at `subastas-db:5432` on the Docker network.
 
 ## Known limitations
 

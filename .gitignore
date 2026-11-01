@@ -11,7 +11,7 @@ wheels/
 
 # Secrets
 .env
-.env.*
+subastas-db.env
 
 # logs
 logs/

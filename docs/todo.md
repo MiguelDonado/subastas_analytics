@@ -96,6 +96,10 @@ The Astro image doesn't include `subastas_analytics` or its dependencies automat
 - **Failed days:** one bad day fails the whole week's run, and a retry repeats all 7 days.
 - **Silent failures:** nothing sends an alert when a run fails, so check `logs/weekly_airflow.log` and the Airflow UI.
 
+- I think it should look not only 7 days before in the dag timedelta, but 14 days before for redundancy, because dag runs once per week, and imaging one week doesnt run, if only looks 7 days behind i would lose data.
+
+
+Because it's part of the Astro project, the database starts and stops with Airflow, so it's only available during the weekly run or when Airflow is started by hand. The data stays in the `subastas_db_data` volume while it's stopped, but `astro dev kill` will most likely delete that volume. The Shiny app will need the database running, so this has to be revisited when the app is built.
 
 
 
@@ -104,3 +108,4 @@ The Astro image doesn't include `subastas_analytics` or its dependencies automat
 ## Data modelling
 
 - [ ] **Later-round starting prices.** Announcements can offer each lot in up to four rounds (1ª–4ª subasta), each with a lower starting price ("tipo de licitación"). For example, lot 1 of BOE-B-2026-34259 lists 5.271,11 € / 4.481 € / 3.809 € / 3.238 €. Today only the 1st-round price is stored (`lots.starting_price`). To keep every round, add a child table `lot_rounds(lot_id FK, round_number, starting_price, PK(lot_id, round_number))`. This would allow analysing the discount between rounds.
+- If same auction, but on different times, my doubt is first of all the subsequent auctions are announced in BOE as well??, and if so they have a different BOE_REF or the same one??

@@ -1,0 +1,50 @@
+# Extra containers for local development.
+#
+# `astro dev start` merges this file into the Docker Compose configuration that
+# the Astro CLI generates. New service names add containers; existing names
+# (e.g. `scheduler`) would modify the ones Astro defines.
+# Run `astro dev restart` after changing this file.
+
+services:
+  # Postgres database for the properties information (separate from Airflow's own
+  # metadata database). The service name is also the container's hostname on
+  # the Docker network, so Airflow connects to it as host `subastas-db`.
+  subastas-db:
+    # Official Postgres image, major version pinned: the data files on disk can
+    # only be read by the same major version, so a silent upgrade would break it.
+    image: postgres:17
+
+    # Start this container again whenever the Docker daemon starts (e.g. after
+    # a reboot), unless it was stopped on purpose with `astro dev stop`.
+    restart: unless-stopped
+
+    # POSTGRES_USER, POSTGRES_PASSWORD and POSTGRES_DB, read by the image to
+    # create the superuser and the database. Kept in subastas-db.env, out of git
+    # (template: subastas-db.env.example).
+    # Applied ONLY on the first start, when the data directory is empty. Changing
+    # them later does nothing: change the password with SQL, or delete the
+    # volume and start over.
+    env_file:
+      - ./subastas-db.env
+
+    # host port : container port. Exposes Postgres on localhost:5433 for psql or
+    # DBeaver on the host (5432 is taken by Astro's own Postgres). Airflow doesn't
+    # use this mapping: it talks to subastas-db:5432 directly over the Docker network.
+    ports:
+      - "127.0.0.1:5435:5432"
+
+    # Named volume mounted where Postgres 17 keeps its files, so the data lives
+    # outside the container and survives stop/restart. On the host it's under
+    # /var/lib/docker/volumes/. `astro dev kill` will most likely delete it.
+    volumes:
+      - subastas_db_data:/var/lib/postgresql/data
+
+    # Astro's network, shared with the scheduler and the other Airflow
+    # containers. Containers can only reach each other by name on the same network.
+    networks:
+      - airflow
+
+# Declares the named volume used above. Without this, Compose fails with
+# `service "cgm-db" refers to undefined volume subastas_db_data`.
+volumes:
+  subastas_db_data:

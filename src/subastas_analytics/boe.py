@@ -105,7 +105,7 @@ def get_auction_info(xml_url: str) -> dict:
     return {
         "boe_ref": boe_ref,
         "announcement_text": announcement_text,
-        "publication_date": publication_date,
+        "publication_date": publication_date.isoformat(),   # Converts the date from a Python object into plain text
         "source_url": xml_url
     }
 

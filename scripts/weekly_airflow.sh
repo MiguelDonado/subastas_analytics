@@ -6,5 +6,5 @@ export PATH=/usr/local/bin:/usr/bin:/bin
 cd /home/miguel/6.Projects/subastas_analytics || exit 1
 
 astro dev start --no-browser || exit 1   # start Airflow
-sleep 7200                               # give it 1 hour to finish
+sleep 7200                               # give it 2 hours to finish
 astro dev stop                           # free the RAM until next week
