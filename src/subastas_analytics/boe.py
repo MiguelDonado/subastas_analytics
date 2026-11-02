@@ -9,7 +9,8 @@ from datetime import date, datetime
 import requests
 from lxml import etree
 
-from .config import AUCTION_TITLE_RE, BOE_SUMARIO_ENDPOINT
+from .config import AUCTION_TITLE_RE, BOE_SUMARIO_ENDPOINT, NON_AUCTION_TITLE_RE
+from .llm import is_auction_title
 
 
 def _fetch_boe_sumario(fecha: date, timeout: float = 30) -> bytes | None:
@@ -30,11 +31,10 @@ def _fetch_boe_sumario(fecha: date, timeout: float = 30) -> bytes | None:
     response.raise_for_status()
     return response.content
 
-
-def _parse_auction_urls(sumario_xml: bytes) -> list[str]:
-    """Return the `url_xml` of every item whose title announces a Delegación de Economía y Hacienda auction."""
+def _parse_auction_candidates(sumario_xml: bytes) -> list[tuple[str,str]]:
+    """Return the (title,`url_xml`) of every item whose title announces a Delegación de Economía y Hacienda auction."""
     root = etree.fromstring(sumario_xml)
-    urls = []
+    candidates = []
     # Iterate over all item elements
     for item in root.iter("item"):
         # Finds first child of "item" names "titulo" and returns the text inside of it
@@ -42,19 +42,32 @@ def _parse_auction_urls(sumario_xml: bytes) -> list[str]:
         # regex.search: Returns a match object if there is a match anywhere on the string
         if not AUCTION_TITLE_RE.search(titulo):
             continue
+        # Skip corrections, suspensions, cancellations... of an earlier auction
+        if NON_AUCTION_TITLE_RE.search(titulo):
+            continue
         url_xml = item.findtext("url_xml")
         if url_xml:
-            urls.append(url_xml.strip())
-    return urls
+            candidates.append((titulo, url_xml.strip()))
+    return candidates
 
 
 def get_auction_urls(fecha: date) -> list[str]:
-    """Return the list of `url_xml` for the auctions published that day"""
+    """
+    Return the list of `url_xml` for the auctions published that day
+    
+    Special scenarios:
+
+    Situation                          Returns 
+     No BOE                              []
+     No auction candidates               []
+     Candidates, but LLM rejects'em all  []
+    """
     sumario_xml = _fetch_boe_sumario(fecha)
     if sumario_xml is None:
         return []
-    urls = _parse_auction_urls(sumario_xml)
-    return urls
+    # The regexes are free and discard most titles. Claude catches the wording they don't cover
+    auction_candidates = _parse_auction_candidates(sumario_xml)
+    return [url for title, url in auction_candidates if is_auction_title(title)]
 
 def _fetch_announcement(xml_url: str, timeout: float = 30) -> bytes:
     """Return the raw XML summary for `xml_url`"""

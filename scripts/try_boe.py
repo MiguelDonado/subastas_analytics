@@ -3,7 +3,11 @@
 import sys
 from datetime import date
 
+from dotenv import load_dotenv
+
 from subastas_analytics.boe import get_auction_info, get_auction_urls
+
+load_dotenv()
 
 test_date = "2026-10-21"
 

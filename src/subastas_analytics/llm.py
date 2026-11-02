@@ -7,6 +7,44 @@ from pydantic import BaseModel, Field
 
 MODEL = "claude-opus-5-5"
 
+TITLE_SYSTEM_PROMPT = """\
+You classify the titles of Spanish BOE announcements from the Delegaciones de Economía y Hacienda.
+
+is_auction is true if the title calls or announces an auction (subasta), in any round, \
+including a new auction of goods that were offered before.
+
+is_auction is false if the title only changes an auction that was already announced: \
+it corrects, rectifies, suspends, withdraws or excludes lots from, cancels, postpones or modifies it, \
+or it reports its result."""
+
+
+class TitleCheck(BaseModel):
+    is_auction: bool = Field(description="True if the title announces an auction, false if it only changes an earlier one")
+
+
+def is_auction_title(title: str) -> bool:
+    """Ask Claude whether a title announces an auction, rather than changing an earlier one."""
+    client = anthropic.Anthropic()
+
+    response = client.beta.messages.parse(
+        model=MODEL,
+        # Thinking counts towards this limit, so it leaves room for more than the short answer
+        max_tokens=2048,
+        system=TITLE_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": f"<titulo>\n{title}\n</titulo>"}],
+        output_format=TitleCheck,
+        output_config={"effort": "low"},
+        betas=["server-side-fallback-2026-07-01"],
+        fallbacks="default",
+    )
+
+    # Raise instead of guessing: an Airflow retry is better than keeping or losing an announcement by mistake
+    if response.stop_reason == "refusal":
+        raise RuntimeError(f"Claude declined the request: {response.stop_details}")
+    if response.stop_reason == "max_tokens":
+        raise RuntimeError(f"Response was cut off by max_tokens for title: {title}")
+    return response.parsed_output.is_auction
+
 SYSTEM_PROMPT = """\
 You extract structured data from Spanish BOE announcements of public auctions \
 held by the Delegaciones de Economía y Hacienda.
@@ -21,7 +59,6 @@ Rules:
 - starting_price: the price of the earliest round offered in this announcement, normally the 1ª subasta. A notice calling only a 3ª subasta gives the 3ª subasta price. Prices are written in Spanish format ("5.271,11 €"); return them as numbers in euros (5271.11). If the text gives none for a lot, return null.
 - catastral_references: every catastral reference of the properties being sold in the lot, as separate items, copied exactly as written. Ignore references of adjoining parcels mentioned in the boundaries (linderos).
 - If a field is missing from the text, leave it empty or null; never invent values.
-- If the announcement offers no lots (for example, it only modifies or cancels an earlier auction), return an empty list of lots, even if it describes the affected lot."""
 
 
 class Lot(BaseModel):
