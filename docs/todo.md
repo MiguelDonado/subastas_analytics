@@ -38,6 +38,8 @@ So the order I'd suggest is: list the questions, then build the loader and run i
 
 QUALITY CHECKS
 
+Extract qualification as well in the future
+
 # DAG design
 
 **Status: planned.** `dags/` only contains Astro's example DAG so far, and the code below depends on `subastas_analytics.pipeline.ingest_day`, which doesn't exist yet.
@@ -107,5 +109,8 @@ Because it's part of the Astro project, the database starts and stops with Airfl
 
 ## Data modelling
 
+- [ ] **Keep raw API responses in bronze.** Silver can only be rebuilt today by calling the Claude and Catastro APIs again, which costs money and may give different results.
+  - `bronze.auction_extractions(boe_ref, model, extraction_version, output JSONB, extracted_at)`, unique on `(boe_ref, model, extraction_version)`. Store the model that actually answered, and change `extraction_version` whenever the prompt or the `Anuncio` schema changes.
+  - `bronze.catastro_responses`: one response per catastral reference, stored as received with `fetched_at`, including "not found" answers.
 - [ ] **Later-round starting prices.** Announcements can offer each lot in up to four rounds (1ª–4ª subasta), each with a lower starting price ("tipo de licitación"). For example, lot 1 of BOE-B-2026-34259 lists 5.271,11 € / 4.481 € / 3.809 € / 3.238 €. Today only the 1st-round price is stored (`lots.starting_price`). To keep every round, add a child table `lot_rounds(lot_id FK, round_number, starting_price, PK(lot_id, round_number))`. This would allow analysing the discount between rounds.
 - If same auction, but on different times, my doubt is first of all the subsequent auctions are announced in BOE as well??, and if so they have a different BOE_REF or the same one??

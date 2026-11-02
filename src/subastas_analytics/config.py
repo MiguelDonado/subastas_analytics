@@ -16,3 +16,10 @@ AUCTION_TITLE_RE = re.compile(
     r"Delegaci[oó]n de Econom[ií]a y Hacienda.*\bsubasta",
     re.IGNORECASE | re.DOTALL,
 )
+
+##########################
+# Goolzoom 
+##########################
+# Template string: str.format() replaces it with the value of the keyword argument that has the same name
+GOOLZOOM_REF_CAT_DATA_ENDPOINT = "https://api.goolzoom.com/v1/cadastre/cadastralreference/{catastral_reference}/data"
+GOOLZOOM_TEST_REFERENCE = "15012B514003380000LQ"
