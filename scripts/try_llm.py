@@ -1,0 +1,20 @@
+"""Print what Claude extracts from the BOE announcements given on the script"""
+
+import sys
+from datetime import date
+
+from dotenv import load_dotenv
+
+from subastas_analytics.boe import get_auction_info, get_auction_urls
+from subastas_analytics.llm import extract_info_announcement
+
+load_dotenv()  # Reads ANTHROPIC_API_KEY from .env
+
+test_date = "2026-10-21"
+urls = get_auction_urls(date.fromisoformat(test_date))
+for url in urls:
+    auction = get_auction_info(url)
+    announcement = extract_info_announcement(auction["announcement_text"])
+    print(f"\n=== {auction["boe_ref"]} | held_at: {announcement.held_at} | lots: {len(announcement.lots)}")
+    for lot in announcement.lots:
+        print(f"Lot {lot.lot_number} | {lot.starting_price} | {lot.catastral_references}")
