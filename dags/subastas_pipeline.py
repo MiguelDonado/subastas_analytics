@@ -1,27 +1,37 @@
+import os
 from datetime import timedelta
-from pathlib import Path
 
+import requests
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.sdk import dag, task, task_group
 from pendulum import datetime
 
-from subastas_analytics.boe import get_auction_info, get_auction_urls
+from subastas_analytics.clients.boe import fetch_auction, fetch_auction_urls
+from subastas_analytics.config import SQL_DIR
+from subastas_analytics.loaders.bronze import insert_auctions
+from subastas_analytics.loaders.silver import load_silver
 
-SQL_DIR = Path("/usr/local/airflow/include/sql")
+
+def _ping_failure(context):
+    """
+    Alerts you right away. It also stops a failed catchup run from being hidden when another run succeeds in the same window.
+    """
+    requests.get(f"{os.environ['HEALTHCHECK_URL']}/fail", timeout = 10)
 
 
 @dag(
     schedule="0 0 * * 1",   # Mondays at 00:00 UTC
     # Earliest date the DAG can have a scheduled run. Airflow doesnt schedule anything before it
-    start_date=datetime(2026, 10, 5),
+    start_date=datetime(2026, 10, 25),
     # Creates a run for every scheduled time since start_date that hasn't run yet
     catchup=True,
     default_args={
     "retries": 3,
     "retry_delay": timedelta(minutes=2),          # first wait
     "retry_exponential_backoff": True,            # double the wait each time
-    "max_retry_delay": timedelta(minutes=30),     # upper limit for any single wait
+    "max_retry_delay": timedelta(minutes=30),     # upper limit for any single wait,
+    "on_failure_callback": _ping_failure,         # Called only if the task fails on its last retry
     },
     tags=["subastas"],
     # Makes sure the DAG starts unpaused when Airflow first registers it, so it can run without you clicking anything in the UI.
@@ -56,23 +66,17 @@ def subastas_pipeline():
             auctions = []
             for days_back in range(7,0,-1):
                 particular_date = monday - timedelta(days=days_back)
-                for url in get_auction_urls(particular_date):
-                    auction = get_auction_info(url)
+                for url in fetch_auction_urls(particular_date):
+                    auction = fetch_auction(url)
                     auctions.append(auction)
             print(f"Fetched {len(auctions)} auctions")
             return auctions
 
         @task
         def load_auctions(auctions: list[dict]) -> int:
-            insert_sql = (SQL_DIR / "insert_bronze_auctions.sql").read_text()
             conn = PostgresHook(postgres_conn_id="subastas_db").get_conn()
-            inserted = 0
             try:
-                with conn.cursor() as cursor:
-                    for auction in auctions:
-                        cursor.execute(insert_sql, auction)
-                        inserted += cursor.rowcount   # 1 if inserted, 0 if already stored
-                conn.commit()
+                inserted = insert_auctions(conn, auctions)
             finally:
                 conn.close()
             print(f"Inserted {inserted}, skipped {len(auctions) - inserted}")
@@ -82,6 +86,35 @@ def subastas_pipeline():
         loaded = load_auctions(auctions)
         create_table >> loaded
 
-    bronze()
+    @task_group
+    def silver():
+        create_tables = SQLExecuteQueryOperator(
+            task_id="create_tables",
+            conn_id="subastas_db",
+            sql="create_silver.sql"
+        )
+
+        @task
+        def transform_auctions() -> dict:
+            """Loads every announcement in bronze that isn't in silver yet."""
+            conn = PostgresHook(postgres_conn_id="subastas_db").get_conn()
+            try:
+                result = load_silver(conn)
+            finally:
+                conn.close()
+
+            print(f"Loaded {len(result['loaded'])}, failed {len(result['failed'])}")
+            # Fail the task so the problem shows in the UI. A retry only repeats the failed ones.
+            if result["failed"]:
+                raise RuntimeError(f"Announcements that failed: {result['failed']}")
+            return result
+
+        create_tables >> transform_auctions()
+
+    @task
+    def ping_success():
+        requests.get(os.environ["HEALTHCHECK_URL"], timeout = 10).raise_for_status()
+
+    bronze() >> silver() >> ping_success()
 
 subastas_pipeline()

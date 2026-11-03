@@ -1,4 +1,4 @@
-"""Extract relevant information from the text of a BOE Auction announcement using Claude."""
+"""Classify auctions and extract relevant information from the announcement text of a BOE Auction using Claude."""
 
 from datetime import datetime
 
@@ -31,6 +31,7 @@ def is_auction_title(title: str) -> bool:
         # Thinking counts towards this limit, so it leaves room for more than the short answer
         max_tokens=2048,
         system=TITLE_SYSTEM_PROMPT,
+        # <titulo>...</titulo>: To distinguish the part to process from the rest of the prompt
         messages=[{"role": "user", "content": f"<titulo>\n{title}\n</titulo>"}],
         output_format=TitleCheck,
         output_config={"effort": "low"},
@@ -49,8 +50,7 @@ SYSTEM_PROMPT = """\
 You extract structured data from Spanish BOE announcements of public auctions \
 held by the Delegaciones de Economía y Hacienda.
 
-Each announcement lists one or more lots (lotes). A lot can contain several \
-properties (fincas), and each property can have several catastral references. \
+Each announcement lists one or more lots (lotes). A lot can contain several catastral references. \
 Each lot has a starting price (tipo de licitación) per auction round.
 
 Rules:
@@ -59,6 +59,7 @@ Rules:
 - starting_price: the price of the earliest round offered in this announcement, normally the 1ª subasta. A notice calling only a 3ª subasta gives the 3ª subasta price. Prices are written in Spanish format ("5.271,11 €"); return them as numbers in euros (5271.11). If the text gives none for a lot, return null.
 - catastral_references: every catastral reference of the properties being sold in the lot, as separate items, copied exactly as written. Ignore references of adjoining parcels mentioned in the boundaries (linderos).
 - If a field is missing from the text, leave it empty or null; never invent values.
+"""
 
 
 class Lot(BaseModel):

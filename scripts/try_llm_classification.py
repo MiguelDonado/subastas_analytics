@@ -6,7 +6,7 @@ regex would have dropped. Each title is one API call.
 
 from dotenv import load_dotenv
 
-from subastas_analytics.llm import is_auction_title
+from subastas_analytics.clients.llm import is_auction_title
 
 load_dotenv()  # Reads ANTHROPIC_API_KEY from .env
 

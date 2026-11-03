@@ -3,9 +3,16 @@ Stores constants
 """
 
 import re
+from pathlib import Path
 
 ##########################
-# BOE 
+# SQL
+##########################
+# Where the project's include/ folder is inside the Airflow containers
+SQL_DIR = Path("/usr/local/airflow/include/sql")
+
+##########################
+# BOE
 ##########################
 
 # Template string: str.format() replaces it with the value of the keyword argument that has the same name

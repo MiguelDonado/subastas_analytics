@@ -9,7 +9,7 @@ from datetime import date, datetime
 import requests
 from lxml import etree
 
-from .config import AUCTION_TITLE_RE, BOE_SUMARIO_ENDPOINT, NON_AUCTION_TITLE_RE
+from ..config import AUCTION_TITLE_RE, BOE_SUMARIO_ENDPOINT, NON_AUCTION_TITLE_RE
 from .llm import is_auction_title
 
 
@@ -51,7 +51,7 @@ def _parse_auction_candidates(sumario_xml: bytes) -> list[tuple[str,str]]:
     return candidates
 
 
-def get_auction_urls(fecha: date) -> list[str]:
+def fetch_auction_urls(fecha: date) -> list[str]:
     """
     Return the list of `url_xml` for the auctions published that day
     
@@ -108,7 +108,7 @@ def _get_announcement_publication_date(root: etree._Element) -> date:
     return publication_date
 
 
-def get_auction_info(xml_url: str) -> dict:
+def fetch_auction(xml_url: str) -> dict:
     """Return a dictionary with the relevant information for the auction according the bronze layer"""
     auction_xml = _fetch_announcement(xml_url)
     root = etree.fromstring(auction_xml)

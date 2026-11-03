@@ -1,14 +1,16 @@
 """Look up catastral references in the Goolzoom API, which serves Catastro data."""
 
 import html
+import logging
 import os
 import re
 from dataclasses import dataclass
 
 import requests
 
-from .config import GOOLZOOM_REF_CAT_DATA_ENDPOINT, GOOLZOOM_TEST_REFERENCE
+from ..config import GOOLZOOM_REF_CAT_DATA_ENDPOINT, GOOLZOOM_TEST_REFERENCE
 
+logger = logging.getLogger(__name__)
 
 # To store data in a structured way
 @dataclass
@@ -23,10 +25,17 @@ class CatastroInfo:
     longitude: float
     
 
-def _normalize_reference(raw: str) -> str:
+def normalize_reference(raw: str) -> str:
     """Make sure reference is correctly written"""
     # Remove non-alphanumeric characters
     return re.sub(r"[^0-9A-Za-z]", "", raw).upper()
+
+def _parse_area(text: str | None) -> float | None:
+    if not text:
+        return None
+    # html.unescape(): Convert HTML code to the real character
+    number = html.unescape(text).split()[0]
+    return float(number.replace(".", "").replace(",", "."))
 
 def _get(path: str, timeout: float = 30) -> requests.Response:
     """Standardize how requests are made"""
@@ -37,6 +46,7 @@ def _get(path: str, timeout: float = 30) -> requests.Response:
     )
 
 def _get_data(reference: str) -> dict | None:
+    """Get the data of a reference, or None if it doesn't exist"""
     path = GOOLZOOM_REF_CAT_DATA_ENDPOINT.format(catastral_reference=reference)
     response = _get(path)
     # Goolzoom answers 502 both for a reference that doesn't exist and for an outage.
@@ -48,7 +58,6 @@ def _get_data(reference: str) -> dict | None:
         ).raise_for_status() 
         # If we reach this point, it means the reference did not exist and API is working
         return None
-    # If there is an error it raises an exception and exists the function
 
     # API also says that when a reference does not exist it returns 404
     if response.status_code == 404:
@@ -57,28 +66,39 @@ def _get_data(reference: str) -> dict | None:
     response.raise_for_status()
     return response.json()["records"]
 
-def _parse_area(text: str | None) -> float | None:
-    if not text:
-        return None
-    # html.unescape(): Convert HTML code to the real character
-    number = html.unescape(text).split()[0]
-    return float(number.replace(".", "").replace(",", "."))
-
 def lookup_reference(raw_reference: str) -> CatastroInfo | None:
-    """Return the Catastro data of a reference, or None if it isn't 20 characters or
-    doesn't exist"""
-    reference = _normalize_reference(raw_reference)
+    """Return the Catastro data of a reference, or None if it isn't 20 characters,
+    doesn't exist or has incomplete data"""
+    reference = normalize_reference(raw_reference)
     # Case 1: Reference is not 20 characters long
     if len(reference) != 20:
+        logger.warning("Reference %s does not have 20 characters", reference)
         return None
 
     records = _get_data(reference)
     # Case 2: Reference doesnt exist
     if records is None:
+        logger.warning("Reference %s does not exist in Catastro", reference)
         return None
 
     plot = records["plot"]
+    # [0]: Because it returns a list even if its one element
+    # Cuz in some cases if its a building one ref catastral may hold several properties.
     property = records["properties"][0]
+    fields = {
+        "municipality": plot["Municipality"],
+        "province": plot["Province"],
+        "use": property["Main use"],
+        "class": property["Class"],
+        "surface": plot["Area of the property"],
+        "centroid": plot["Centroid"],
+    }
+    # Case 3: Reference exists but some field is empty
+    missing = [name for name, value in fields.items() if not value]
+    if missing:
+        logger.warning("Reference %s has no value for %s", reference, ", ".join(missing))
+        return None
+    
     latitude, longitude = plot["Centroid"].split()
     return CatastroInfo(
         reference=reference,

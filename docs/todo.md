@@ -40,6 +40,8 @@ QUALITY CHECKS
 
 Extract qualification as well in the future
 
+Ensure costs and failures are handled so I do not end up spending too much API credits.
+
 # DAG design
 
 **Status: planned.** `dags/` only contains Astro's example DAG so far, and the code below depends on `subastas_analytics.pipeline.ingest_day`, which doesn't exist yet.
@@ -103,6 +105,7 @@ The Astro image doesn't include `subastas_analytics` or its dependencies automat
 
 Because it's part of the Astro project, the database starts and stops with Airflow, so it's only available during the weekly run or when Airflow is started by hand. The data stays in the `subastas_db_data` volume while it's stopped, but `astro dev kill` will most likely delete that volume. The Shiny app will need the database running, so this has to be revisited when the app is built.
 
+Dump to a log all the failures, typos... I only want to introduce data that is 100% correct in my db, but i wanna be aware of the data that give problems.
 
 
 ## Possible future improvements.
