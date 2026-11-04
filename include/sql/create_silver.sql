@@ -60,9 +60,6 @@ CREATE TABLE IF NOT EXISTS silver.catastral_references (
     municipio_id            BIGINT            NOT NULL REFERENCES silver.municipios (municipio_id)
 );
 
-CREATE INDEX IF NOT EXISTS ix_catastral_references_municipio_id
-    ON silver.catastral_references (municipio_id);
-
 -- -----------------------------------------------------------------------------
 -- lots_catastral_references: which references each lot contains
 -- -----------------------------------------------------------------------------
@@ -71,7 +68,3 @@ CREATE TABLE IF NOT EXISTS silver.lots_catastral_references (
     catastral_reference_id  BIGINT  NOT NULL REFERENCES silver.catastral_references (catastral_reference_id) ON DELETE CASCADE,
     PRIMARY KEY (lot_id, catastral_reference_id)
 );
-
--- The primary key's index starts with lot_id, so it can't look up rows by reference alone
-CREATE INDEX IF NOT EXISTS ix_lots_catastral_references_catastral_reference_id
-    ON silver.lots_catastral_references (catastral_reference_id);

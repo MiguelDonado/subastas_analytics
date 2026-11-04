@@ -22,3 +22,14 @@ Data Modeling
 - Define a structured output schema: You want predictable, structured data that your database can consume. 
     
 
+
+## Ports
+
+Set in `.astro/config.yaml`, because `cgm-analytics` already uses 8080, 5432 and 5433:
+
+| Service | Port |
+|---|---|
+| Airflow UI | 8081 |
+| Airflow metadata Postgres | 5434 |
+
+`subastas-db` is exposed on `localhost:5435`, set in `docker-compose.override.yml`. This mapping is for tools on the laptop, such as `dbeaver`.

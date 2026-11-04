@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS gold.dim_catastral_references (
     class                   VARCHAR(100)      NOT NULL,
     surface                 NUMERIC(12, 2)    NOT NULL,
     municipio               VARCHAR(100)      NOT NULL,
-    province                VARCHAR(100)      NOT NULL,
+    province                VARCHAR(100)      NOT NULL
 );
 
 -- -----------------------------------------------------------------------------
@@ -69,10 +69,6 @@ CREATE TABLE IF NOT EXISTS gold.lots_catastral_references_bridge (
     PRIMARY KEY (lot_id, catastral_reference_id)
 );
 
--- The primary key's index starts with lot_id, so it can't look up rows by reference alone
-CREATE INDEX IF NOT EXISTS ix_lots_catastral_references_bridge_catastral_reference_id
-    ON gold.lots_catastral_references_bridge (catastral_reference_id);
-
 -- -----------------------------------------------------------------------------
 -- app_lots: what the Shiny app reads, one row per lot
 -- A lot shows the most common value of its references (the first alphabetically if
@@ -89,6 +85,25 @@ WITH lot_attributes AS (
     FROM gold.lots_catastral_references_bridge b
     JOIN gold.dim_catastral_references r USING (catastral_reference_id)
     GROUP BY b.lot_id
+),
+lot_properties AS (
+    -- A re-auctioned lot keeps the same references, so the same list means the same property
+    SELECT
+        lot_id,
+        string_agg(catastral_reference_id::TEXT, ',' ORDER BY catastral_reference_id) AS property_refs
+    FROM gold.lots_catastral_references_bridge
+    GROUP BY lot_id
+),
+lot_history AS (
+    -- Within each property, rank its lots from newest to oldest
+    SELECT
+        f.lot_id,
+        RANK() OVER (
+            PARTITION BY p.property_refs
+            ORDER BY f.publication_date_id DESC, f.auction_id DESC
+        ) AS auction_rank
+    FROM gold.fact_lots f
+    JOIN lot_properties p USING (lot_id)
 )
 SELECT
     f.lot_id,
@@ -103,9 +118,11 @@ SELECT
     attributes.province,
     attributes.municipio,
     attributes.use,
-    attributes.class
+    attributes.class,
+    history.auction_rank = 1 AS is_latest
 FROM gold.fact_lots f
 JOIN gold.dim_auctions a USING (auction_id)
 JOIN lot_attributes attributes USING (lot_id)
+JOIN lot_history history USING (lot_id)
 JOIN gold.dim_date publication ON publication.date_id = f.publication_date_id
 LEFT JOIN gold.dim_date held ON held.date_id = f.held_date_id;

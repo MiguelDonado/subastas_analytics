@@ -1,23 +1,3 @@
-## TODO
-
-You can, but I'd still build the loader first, at least bronze → silver on a sample of announcements.
-
-The first step of the plan is now done: docs/app-design.md is effectively the list of questions gold has to answer. The reason to load data before designing gold still holds, though:
-
-- Silver hasn't seen real data. The riskiest parts of the project haven't been tested yet: the LLM extraction from the announcement text and the Catastro API lookups.
-- Real data could change silver. You might find lots with no catastral reference, references Catastro can't find, or announcements in odd formats. Any of these could change silver, and gold is built from silver.
-- Gold design depends on the data. With real rows you can see how many lots have several references, how prices and surfaces are spread, and which uses and classes actually appear. That's what you need to choose the grain and dimensions of the star schema.
-
-So the next steps would be:
-1. Bronze loader: fetch the BOE daily summaries, filter for the Hacienda auctions and store them in bronze.auctions. Start with a few weeks of data, not the full history.
-2. Silver loader: extract auctions, lots and properties with the LLM, enrich the catastral references with the Catastro API, and fill the municipios.
-3. Check the results against a few announcements by hand.
-4. Then gold: the star schema, plus the view the app reads from.
-
-If you'd rather design gold now, I can do it. Just expect to adjust it once real data comes in. Which would you like to start with?
-
-I'd write the loader first, at least bronze → silver on a sample of announcements.
-
 1. Silver hasn't seen real data yet. The fields come from LLM extraction and the Catastro API, which are the riskiest parts of the project. Once you load real announcements you'll likely find surprises: lots with no price, announcements in odd formats, references Catastro doesn't return. Any of these could change silver.
 2. Gold is built from silver. If you design the star schema now and silver changes later, you redo both. With silver checked against real data, gold sits on solid ground.
 3. Real data makes the dimensional design easier. You'll see the actual values, volumes and how things are distributed. That helps you decide the grain of the fact table and which attributes belong in each dimension.
@@ -111,14 +91,11 @@ Dump to a log all the failures, typos... I only want to introduce data that is 1
 
 
 ## Possible future improvements.
-
-## Data modelling
-
-- [ ] **Keep raw API responses in bronze.** Silver can only be rebuilt today by calling the Claude and Catastro APIs again, which costs money and may give different results.
-  - `bronze.auction_extractions(boe_ref, model, extraction_version, output JSONB, extracted_at)`, unique on `(boe_ref, model, extraction_version)`. Store the model that actually answered, and change `extraction_version` whenever the prompt or the `Anuncio` schema changes.
-  - `bronze.catastro_responses`: one response per catastral reference, stored as received with `fetched_at`, including "not found" answers.
 - [ ] **Later-round starting prices.** Announcements can offer each lot in up to four rounds (1ª–4ª subasta), each with a lower starting price ("tipo de licitación"). For example, lot 1 of BOE-B-2026-34259 lists 5.271,11 € / 4.481 € / 3.809 € / 3.238 €. Today only the 1st-round price is stored (`lots.starting_price`). To keep every round, add a child table `lot_rounds(lot_id FK, round_number, starting_price, PK(lot_id, round_number))`. This would allow analysing the discount between rounds.
 - If same auction, but on different times, my doubt is first of all the subsequent auctions are announced in BOE as well??, and if so they have a different BOE_REF or the same one??
+
+
+logs
 
 # Improvements
 - [] Use systemd timer instead of cron. It has the advantage that if computer is off, it would trigger the script whenever computer starts, whereas cron doesnt. If computer off, during cron schedule, cron job would not be executed.
