@@ -15,6 +15,6 @@ urls = fetch_auction_urls(date.fromisoformat(test_date))
 for url in urls:
     auction = fetch_auction(url)
     announcement = extract_info_announcement(auction["announcement_text"])
-    print(f"\n=== {auction["boe_ref"]} | held_at: {announcement.held_at} | lots: {len(announcement.lots)}")
+    print(f"\n=== {auction["boe_ref"]} | held_date: {announcement.held_date} | lots: {len(announcement.lots)}")
     for lot in announcement.lots:
         print(f"Lot {lot.lot_number} | {lot.starting_price} | {lot.catastral_references}")

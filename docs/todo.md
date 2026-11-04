@@ -30,13 +30,15 @@ So the order I'd suggest is: list the questions, then build the loader and run i
 
 ~/6.Projects/subastas_analytics/scripts/weekly_airflow.sh >> ~/6.Projects/subastas_analytics/logs/weekly_airflow.log 2>&1
 
+Workflow diagram
+
 ### Tips for the LLM layer
 - Deduplication: Don't reprocess unchanged documents. 
 - Structured output: Require responses that conform to your schema.
 - Model versioning: Record which model and extraction instructions produced each result.
 - Retry handling: Retry temporary API failures without duplicating records.
 
-QUALITY CHECKS
+QUALITY CHECKS at the end on different layers (For example on auction that there are not invalid auctions)?
 
 Extract qualification as well in the future
 

@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS silver.auctions (
     boe_ref           VARCHAR(30)  NOT NULL UNIQUE,              -- e.g. BOE-B-2026-34259
     announcement_text TEXT         NOT NULL,                     -- copied from bronze.auctions
     publication_date  DATE         NOT NULL,
-    held_at           TIMESTAMP,                                 -- local time; null if the announcement gives no date
+    held_date         DATE,                                     -- null if the announcement gives no date
     ingested_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),
     source_url        TEXT         NOT NULL UNIQUE
 );
@@ -65,12 +65,11 @@ CREATE INDEX IF NOT EXISTS ix_catastral_references_municipio_id
 -- lots_catastral_references: which references each lot contains
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS silver.lots_catastral_references (
-    id                      BIGINT  GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     lot_id                  BIGINT  NOT NULL REFERENCES silver.lots (lot_id) ON DELETE CASCADE,
     catastral_reference_id  BIGINT  NOT NULL REFERENCES silver.catastral_references (catastral_reference_id) ON DELETE CASCADE,
-    UNIQUE (lot_id, catastral_reference_id)
+    PRIMARY KEY (lot_id, catastral_reference_id)
 );
 
--- The UNIQUE index starts with lot_id, so it can't look up rows by reference alone
+-- The primary key's index starts with lot_id, so it can't look up rows by reference alone
 CREATE INDEX IF NOT EXISTS ix_lots_catastral_references_catastral_reference_id
     ON silver.lots_catastral_references (catastral_reference_id);

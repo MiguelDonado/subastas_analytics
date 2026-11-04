@@ -111,10 +111,26 @@ def subastas_pipeline():
 
         create_tables >> transform_auctions()
 
+    @task_group
+    def gold():
+        create_tables = SQLExecuteQueryOperator(
+            task_id="create_tables",
+            conn_id="subastas_db",
+            sql="create_gold.sql"
+        )
+
+        load_tables = SQLExecuteQueryOperator(
+            task_id="load_tables",
+            conn_id="subastas_db",
+            sql="load_gold.sql"
+        )
+
+        create_tables >> load_tables
+
     @task
     def ping_success():
         requests.get(os.environ["HEALTHCHECK_URL"], timeout = 10).raise_for_status()
 
-    bronze() >> silver() >> ping_success()
+    bronze() >> silver() >> gold() >> ping_success()
 
 subastas_pipeline()

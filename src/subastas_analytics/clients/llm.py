@@ -1,6 +1,6 @@
 """Classify auctions and extract relevant information from the announcement text of a BOE Auction using Claude."""
 
-from datetime import datetime
+from datetime import date
 
 import anthropic
 from pydantic import BaseModel, Field
@@ -54,7 +54,7 @@ Each announcement lists one or more lots (lotes). A lot can contain several cata
 Each lot has a starting price (tipo de licitación) per auction round.
 
 Rules:
-- held_at: the local date and time of the public act or the opening of the offers, not the deadline for submitting them. If the announcement moves the auction to a new date, return the new date. If it gives no date, return null.
+- held_date: the local date of the public act or the opening of the offers, not the deadline for submitting them. If the announcement moves the auction to a new date, return the new date. If it gives no date, return null.
 - lot_number: an integer. "Lote nº 3" is 3 and "Uno)" is 1. A single lot with no number ("Lote único") is 1.
 - starting_price: the price of the earliest round offered in this announcement, normally the 1ª subasta. A notice calling only a 3ª subasta gives the 3ª subasta price. Prices are written in Spanish format ("5.271,11 €"); return them as numbers in euros (5271.11). If the text gives none for a lot, return null.
 - catastral_references: every catastral reference of the properties being sold in the lot, as separate items, copied exactly as written. Ignore references of adjoining parcels mentioned in the boundaries (linderos).
@@ -69,7 +69,7 @@ class Lot(BaseModel):
 
 
 class Announcement(BaseModel):
-    held_at: datetime | None = Field(description="Local date and time the auction is held")
+    held_date: date | None = Field(description="Local date the auction is held")
     lots: list[Lot]
 
 

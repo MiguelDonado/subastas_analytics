@@ -6,8 +6,12 @@ Silver only stores complete data, and everything left out is logged. Search the 
 Problem                                 What happens
  Reference invalid, not found or         REJECTED: the reference isn't stored, the rest of
  with incomplete Catastro data           the announcement is
+ Lot with no valid reference             REJECTED: the lot isn't stored, the rest of the
+                                         announcement is
+ No lots found, or none of them valid    REJECTED: the auction is stored with no lots, so
+                                         it isn't sent to Claude again
  Announcement can't be loaded            FAILED: nothing of it is stored, it is tried again
- (no lots, refused by Claude...)         on the next run
+ (refused by Claude...)                  on the next run
  Claude or Goolzoom are down             The run stops, it is tried again on the next run
 """
 
@@ -81,41 +85,17 @@ def _get_reference_id(cursor, raw_reference: str, boe_ref: str, lot_number: int)
 
 
 def _store_auction(cursor, bronze_row: dict, announcement: Announcement) -> None:
-    """Me quede aqui
-
+    """
     bronze_row: Info about the auction already stored in Bronze layer (using BOE API)
     Announcement: Contains the info extracted from the auction usign Claude API
     """
-
-
-    ##########################
-    # 1. If auction has no lots, raises an error and its marked as FAILED in the logs.
-    ##########################
-    if not announcement.lots:
-        raise ValueError("Claude found no lots in the announcement")
-
-    ##########################
-    # 2. Insert auction in silver.auctions
-    ##########################
-    cursor.execute(read_sql("insert_silver_auction.sql"), {**bronze_row, "held_at": announcement.held_at})
-    auction_id = cursor.fetchone()[0]
-
-    ##########################
-    # 3. Insert lots in silver.lots
-    ##########################
+    valid_lots = []
     for lot in announcement.lots:
-        cursor.execute(read_sql("insert_silver_lot.sql"), {
-            "auction_id": auction_id,
-            "lot_number": lot.lot_number,
-            "starting_price": lot.starting_price,
-        })
-        lot_id = cursor.fetchone()[0]
-
         ##########################
-        # 4. Retrive id of catastral references
+        # 1. Retrive id of catastral references of each lot, before inserting the lots
         #    1. Already stored
         #    2. Not stored -> Insert it -> Retrieve its id
-        
+
         # reference_ids: Holds a list with the ids of all the ref catastral in the lot.
         #                For problematic ref catastral we get None values
         ##########################
@@ -125,16 +105,41 @@ def _store_auction(cursor, bronze_row: dict, announcement: Announcement) -> None
         ]
         # List with the id of all valid catastral references
         valid_reference_ids = [reference_id for reference_id in reference_ids if reference_id is not None]
-        
+
         ###################
-        # 5. Lote has no valid catastral references
+        # Lote has no valid catastral references: It isn't stored
         ###################
         if not valid_reference_ids:
             logger.warning("REJECTED %s lot %s: the lot has no valid catastral reference",
                            bronze_row["boe_ref"], lot.lot_number)
+            continue
+
+        valid_lots.append((lot, valid_reference_ids))
+
+    ##########################
+    # 2. Insert auction in silver.auctions
+    #    Even with no valid lots, so it isn't sent to CLaude again on the next run
+    ##########################
+    cursor.execute(read_sql("insert_silver_auction.sql"), {**bronze_row, "held_date": announcement.held_date})
+    auction_id = cursor.fetchone()[0]
+
+    if not valid_lots:
+        logger.warning("REJECTED %s: the auction has no valid lot (Claude found %d lots)",
+                       bronze_row["boe_ref"], len(announcement.lots))
+
+    for lot, valid_reference_ids in valid_lots:
+        ##########################
+        # 3. Insert lot in silver.lots
+        ##########################
+        cursor.execute(read_sql("insert_silver_lot.sql"), {
+            "auction_id": auction_id,
+            "lot_number": lot.lot_number,
+            "starting_price": lot.starting_price,
+        })
+        lot_id = cursor.fetchone()[0]
 
         ###################
-        # 6. Lote with valid catastral references: Insert rows into junction table
+        # 4. Insert rows into junction table
         ###################
         for reference_id in valid_reference_ids:
             cursor.execute(
@@ -158,7 +163,7 @@ def load_silver(conn) -> dict:
     with conn.cursor() as cursor:
         cursor.execute(read_sql("select_pending_silver_announcements.sql"))
         # cursor.description holds metadata for each column in the result
-        # Example: columns = ["boe_ref", "announcement_text", "held_at"]
+        # Example: columns = ["boe_ref", "announcement_text", "publication_date", "source_url"]
         columns = [column.name for column in cursor.description]
         # .fetchall(): Returns each row as a tuple (with no column names)
         # zip(): Pair each column name with its value, and dict to turn it into a dictionary
