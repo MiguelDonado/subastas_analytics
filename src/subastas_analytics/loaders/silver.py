@@ -6,10 +6,10 @@ Silver only stores complete data, and everything left out is logged. Search the 
 Problem                                 What happens
  Reference invalid, not found or         REJECTED: the reference isn't stored, the rest of
  with incomplete Catastro data           the announcement is
- Lot with no valid reference             REJECTED: the lot isn't stored, the rest of the
-                                         announcement is
- No lots found, or none of them valid    REJECTED: the auction is stored with no lots, so
-                                         it isn't sent to Claude again
+ Lot with no valid reference or with     REJECTED: the lot isn't stored, the rest of the
+ no starting price                       announcement is
+ No held date, no lots found or none     REJECTED: only its boe_ref and the reason are
+ of them valid                           stored, so it isn't sent to Claude again
  Announcement can't be loaded            FAILED: nothing of it is stored, it is tried again
  (refused by Claude...)                  on the next run
  Claude or Goolzoom are down             The run stops, it is tried again on the next run
@@ -84,13 +84,31 @@ def _get_reference_id(cursor, raw_reference: str, boe_ref: str, lot_number: int)
     return _insert_reference(cursor, info)
 
 
-def _store_auction(cursor, bronze_row: dict, announcement: Announcement) -> None:
+def _reject_announcement(cursor, boe_ref: str, reason: str) -> None:
+    """Record a rejected announcement, so it isn't sent to Claude again on the next run"""
+    cursor.execute(
+        read_sql("insert_silver_rejected_announcement.sql"),
+        {"boe_ref": boe_ref, "reason": reason},
+    )
+
+
+def _store_auction(cursor, bronze_row: dict, announcement: Announcement) -> bool:
     """
+    Return True if the auction was stored, or False if it was rejected for having no valid lots
+
     bronze_row: Info about the auction already stored in Bronze layer (using BOE API)
     Announcement: Contains the info extracted from the auction usign Claude API
     """
     valid_lots = []
     for lot in announcement.lots:
+        ###################
+        # Lote has no starting price: It isn't stored
+        ###################
+        if lot.starting_price is None:
+            logger.warning("REJECTED %s lot %s: the lot has no starting price",
+                           bronze_row["boe_ref"], lot.lot_number)
+            continue
+
         ##########################
         # 1. Retrive id of catastral references of each lot, before inserting the lots
         #    1. Already stored
@@ -116,16 +134,20 @@ def _store_auction(cursor, bronze_row: dict, announcement: Announcement) -> None
 
         valid_lots.append((lot, valid_reference_ids))
 
-    ##########################
-    # 2. Insert auction in silver.auctions
-    #    Even with no valid lots, so it isn't sent to CLaude again on the next run
-    ##########################
-    cursor.execute(read_sql("insert_silver_auction.sql"), {**bronze_row, "held_date": announcement.held_date})
-    auction_id = cursor.fetchone()[0]
-
+    ###################
+    # Auction has no valid lots: It isn't stored
+    ###################
     if not valid_lots:
         logger.warning("REJECTED %s: the auction has no valid lot (Claude found %d lots)",
                        bronze_row["boe_ref"], len(announcement.lots))
+        _reject_announcement(cursor, bronze_row["boe_ref"], "No valid lots")
+        return False
+
+    ##########################
+    # 2. Insert auction in silver.auctions
+    ##########################
+    cursor.execute(read_sql("insert_silver_auction.sql"), {**bronze_row, "held_date": announcement.held_date})
+    auction_id = cursor.fetchone()[0]
 
     for lot, valid_reference_ids in valid_lots:
         ##########################
@@ -147,6 +169,8 @@ def _store_auction(cursor, bronze_row: dict, announcement: Announcement) -> None
                 {"lot_id": lot_id, "reference_id": reference_id},
             )
 
+    return True
+
 
 def load_silver(conn) -> dict:
     """Load every announcement in bronze that isn't in silver yet, oldest first.
@@ -154,7 +178,7 @@ def load_silver(conn) -> dict:
     Parameters:
     - conn: Open psycopg2 connection. The caller closes it.
 
-    Returns the boe_refs that were loaded and the ones that failed.
+    Returns the boe_refs that were loaded, the ones that were rejected and the ones that failed.
     """
     ######################################
     # 1. Check pending auctions from bronze to insert on silver
@@ -179,6 +203,7 @@ def load_silver(conn) -> dict:
     conn.commit()
 
     loaded = []
+    rejected = []
     failed = []
 
     for pending_auction in pending_auctions:
@@ -188,15 +213,30 @@ def load_silver(conn) -> dict:
             # 2. Call Claude API to extract info in a structured way
             ######################################
             announcement = extract_info_announcement(pending_auction["announcement_text"])
+
+            ######################################
+            # Reject it if it has no held date
+            ######################################
+            if announcement.held_date is None:
+                logger.warning("REJECTED %s: the announcement has no held date", boe_ref)
+                with conn.cursor() as cursor:
+                    _reject_announcement(cursor, boe_ref, "No held date")
+                conn.commit()
+                rejected.append(boe_ref)
+                continue
+
             with conn.cursor() as cursor:
             ######################################
             # 3. Store auction and its lots and ref catastrales 
             ######################################
-                _store_auction(cursor, pending_auction, announcement)
+                stored = _store_auction(cursor, pending_auction, announcement)
             # One transaction per announcement: it's stored whole or not at all, and a
             # rerun doesn't pay Claude again for the ones already stored
             conn.commit()
-            loaded.append(boe_ref)
+            if stored:
+                loaded.append(boe_ref)
+            else:
+                rejected.append(boe_ref)
 
         # Case 1: API (Claude or GoolZoom) is down, so stop the run
         except (anthropic.APIError, requests.RequestException):
@@ -211,4 +251,4 @@ def load_silver(conn) -> dict:
             logger.exception("FAILED %s: nothing stored for this announcement", boe_ref)
             failed.append(boe_ref)
 
-    return {"loaded": loaded, "failed": failed}
+    return {"loaded": loaded, "rejected": rejected, "failed": failed}

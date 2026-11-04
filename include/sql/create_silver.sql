@@ -68,3 +68,15 @@ CREATE TABLE IF NOT EXISTS silver.lots_catastral_references (
     catastral_reference_id  BIGINT  NOT NULL REFERENCES silver.catastral_references (catastral_reference_id) ON DELETE CASCADE,
     PRIMARY KEY (lot_id, catastral_reference_id)
 );
+
+-- -----------------------------------------------------------------------------
+-- rejected_announcements: announcements with nothing usable (no held date or no valid lots)
+-- Kept here so that they aren't sent to Claude again on every run
+-- ------------------------------------------------------------- ----------------
+CREATE TABLE IF NOT EXISTS silver.rejected_announcements (
+    boe_ref      VARCHAR(30)  PRIMARY KEY,
+    reason       TEXT         NOT NULL,                 -- 
+    rejected_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+COMMENT ON COLUMN silver.rejected_announcements.reason IS 'No held date or no valid lots';

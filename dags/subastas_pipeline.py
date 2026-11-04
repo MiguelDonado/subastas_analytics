@@ -34,6 +34,17 @@ This is safer than scheduling it inside the cron window: cron runs on local time
 UTC, so the two would have to be kept in sync. This way, changing the time of the cron job
 or the clocks changing doesn't require any change in the DAG.
 
+- start_date: The earliest date Airflow can schedule a run, so it never creates one before it.
+              It doesn't trigger a run by itself: the first run is the first scheduled time
+              on or after start_date.
+- catchup=True: Airflow creates a run for every scheduled time since start_date that doesn't
+                have a run yet. It's needed because Airflow is off at Monday 00:00 UTC.
+                A run that failed already exists, so it isn't repeated: clear it in the UI to
+                rerun it.
+
+An old start_date with catchup=True creates one run per week since that date. Each run fetches
+its own week from the BOE and sends the new announcements to Claude, so it costs API credits.
+
 ================================================================================
 Monitoring
 ================================================================================
@@ -151,7 +162,7 @@ def subastas_pipeline():
             finally:
                 conn.close()
 
-            print(f"Loaded {len(result['loaded'])}, failed {len(result['failed'])}")
+            print(f"Loaded {len(result['loaded'])}, rejected {len(result['rejected'])}, failed {len(result['failed'])}")
             # Fail the task so the problem shows in the UI. A retry only repeats the failed ones.
             if result["failed"]:
                 raise RuntimeError(f"Announcements that failed: {result['failed']}")
