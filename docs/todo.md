@@ -119,3 +119,6 @@ Dump to a log all the failures, typos... I only want to introduce data that is 1
   - `bronze.catastro_responses`: one response per catastral reference, stored as received with `fetched_at`, including "not found" answers.
 - [ ] **Later-round starting prices.** Announcements can offer each lot in up to four rounds (1ª–4ª subasta), each with a lower starting price ("tipo de licitación"). For example, lot 1 of BOE-B-2026-34259 lists 5.271,11 € / 4.481 € / 3.809 € / 3.238 €. Today only the 1st-round price is stored (`lots.starting_price`). To keep every round, add a child table `lot_rounds(lot_id FK, round_number, starting_price, PK(lot_id, round_number))`. This would allow analysing the discount between rounds.
 - If same auction, but on different times, my doubt is first of all the subsequent auctions are announced in BOE as well??, and if so they have a different BOE_REF or the same one??
+
+# Improvements
+- [] Use systemd timer instead of cron. It has the advantage that if computer is off, it would trigger the script whenever computer starts, whereas cron doesnt. If computer off, during cron schedule, cron job would not be executed.

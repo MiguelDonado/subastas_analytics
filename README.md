@@ -1,14 +1,21 @@
 ## Extraction source
 **BOE Open Data API**
 **GoolZoom API**
+**Claude API**
 
 ## Tech stack
 Airflow
+Cron jobs
+Job Monitoring (Healtchecks.io)
 UV
-Claude API (messages API)
+APIs and SDK
+GenAI (Messages API Claude)
+
+
+
+
 Data Modeling
-API calls
-Cron job monitoring (healthchecks.io)
+
 
 ## LLM layer
 - This is a GenAI application because it makes API calls to an LLM. It sends the full announcement text and the instructions, and gets back the extracted data.

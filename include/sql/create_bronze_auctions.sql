@@ -22,5 +22,5 @@ CREATE TABLE IF NOT EXISTS bronze.auctions (
 
 COMMENT ON TABLE  bronze.auctions IS 'BOE auction announcements, stored as received from the BOE Open Data API.';
 COMMENT ON COLUMN bronze.auctions.boe_ref IS 'BOE persistent identifier (BOE-B-YYYY-NNNNN).';
-COMMENT ON COLUMN bronze.auctions.announcement_text IS 'Full announcement text, unmodified. Input to the LLM extraction that builds silver.';
+COMMENT ON COLUMN bronze.auctions.announcement_text IS 'Full announcement text, unmodified.';
 COMMENT ON COLUMN bronze.auctions.ingested_at IS 'When the announcement was loaded into bronze.';

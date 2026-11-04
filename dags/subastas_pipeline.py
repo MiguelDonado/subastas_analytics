@@ -1,3 +1,51 @@
+"""
+Weekly DAG that loads the auctions published in the BOE.
+
+================================================================================
+Architecture
+================================================================================
+The DAG follows a medallion architecture:
+
+- Bronze: Loads the raw announcements published in the BOE API over the past 7 days.
+          The BOE API is the only raw source of the pipeline.
+- Silver: Reads bronze, finds the new announcements by looking at which boe_refs aren't
+          in silver yet, and loads only those after cleaning and enriching them.
+          The enrichment comes from other APIs (Claude, Goolzoom). Their data isn't considered
+          bronze, since these APIs can only be called using data that is already in bronze.
+          Modeled in 3NF (except for province, which is kept as a plain attribute of
+          municipios instead of having its own table).
+- Gold: Reloads all of silver on every run.
+        Dimensional model: a star schema, with the addition of a junction table between
+        fact_lots and dim_catastral_references, since a lot can contain several references.
+
+================================================================================
+Scheduling
+================================================================================
+Unlike cgm-analytics, which runs hourly, this pipeline only runs once per week.
+To avoid having the Airflow containers of this project taking up memory all the time,
+an external cron job starts them (astro dev start) and stops them (astro dev stop).
+The cron job only activates the containers when they are needed: it starts them on Monday
+morning and stops them 2 hours later. It doesn't trigger the DAG itself.
+So scheduling has two layers: the cron jobs and Airflow.
+
+The DAG is scheduled at Monday 00:00 UTC on purpose, so that it always comes before the cron job.
+When the containers start, Airflow sees the run it missed and starts it right away (catchup=True).
+This is safer than scheduling it inside the cron window: cron runs on local time and Airflow on
+UTC, so the two would have to be kept in sync. This way, changing the time of the cron job
+or the clocks changing doesn't require any change in the DAG.
+
+================================================================================
+Monitoring
+================================================================================
+With two layers, there is more that can go wrong, so the pipeline relies on
+healthchecks.io and follows the logic of "no news is bad news". We receive an email, and can
+decide how to solve the problem, in two cases:
+- The pipeline fails: A task that fails on its last retry pings /fail, and the email is immediate.
+- The pipeline doesn't even execute (computer off, cron job not firing...): No ping arrives, and
+  the email comes on Tuesday around 10:30 local. The check expects a ping on the same schedule as
+  the cron job (Mondays at 10:30 local), plus 1 day of grace.
+"""
+
 import os
 from datetime import timedelta
 

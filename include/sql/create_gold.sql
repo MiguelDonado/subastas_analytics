@@ -33,14 +33,14 @@ CREATE TABLE IF NOT EXISTS gold.dim_auctions (
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS gold.dim_catastral_references (
     catastral_reference_id  BIGINT            PRIMARY KEY,           -- same id as silver.catastral_references
-    catastral_reference     VARCHAR(20)       NOT NULL UNIQUE,
+    catastral_reference     VARCHAR(20)       NOT NULL UNIQUE CHECK (char_length(catastral_reference) = 20),  -- no spaces, uppercase; references of any other length are not stored
     latitude                DOUBLE PRECISION  NOT NULL,
     longitude               DOUBLE PRECISION  NOT NULL,
     use                     VARCHAR(100)      NOT NULL,
     class                   VARCHAR(100)      NOT NULL,
     surface                 NUMERIC(12, 2)    NOT NULL,
     municipio               VARCHAR(100)      NOT NULL,
-    province                VARCHAR(100)      NOT NULL
+    province                VARCHAR(100)      NOT NULL,
 );
 
 -- -----------------------------------------------------------------------------
@@ -49,13 +49,13 @@ CREATE TABLE IF NOT EXISTS gold.dim_catastral_references (
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS gold.fact_lots (
     lot_id               BIGINT          PRIMARY KEY,                -- same id as silver.lots
-    starting_price       NUMERIC(14, 2),                             -- null if the announcement doesn't give it
+    starting_price       NUMERIC(14, 2)  NOT NULL CHECK (starting_price >= 0),  -- earliest round offered in the announcement                  
     total_surface        NUMERIC(14, 2)  NOT NULL,                   -- sum of the surfaces of its references
     reference_count      INTEGER         NOT NULL,
     auction_id           BIGINT          NOT NULL REFERENCES gold.dim_auctions (auction_id),
     lot_number           INTEGER         NOT NULL,
     publication_date_id  INTEGER         NOT NULL REFERENCES gold.dim_date (date_id),
-    held_date_id         INTEGER         REFERENCES gold.dim_date (date_id),  -- null if the auction has no date
+    held_date_id         INTEGER         NOT NULL REFERENCES gold.dim_date (date_id),  
     UNIQUE (auction_id, lot_number)
 );
 
@@ -93,7 +93,7 @@ WITH lot_attributes AS (
 SELECT
     f.lot_id,
     a.boe_ref,
-    a.source_url,
+    replace(a.source_url, '/xml.php', '/txt.php') AS announcement_url,  -- readable page instead of the raw XML
     f.starting_price,
     f.total_surface,
     f.reference_count,

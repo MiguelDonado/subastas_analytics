@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS silver.auctions (
     boe_ref           VARCHAR(30)  NOT NULL UNIQUE,              -- e.g. BOE-B-2026-34259
     announcement_text TEXT         NOT NULL,                     -- copied from bronze.auctions
     publication_date  DATE         NOT NULL,
-    held_date         DATE,                                     -- null if the announcement gives no date
+    held_date         DATE         NOT NULL,                     
     ingested_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),
     source_url        TEXT         NOT NULL UNIQUE
 );
@@ -26,12 +26,14 @@ CREATE TABLE IF NOT EXISTS silver.auctions (
 -- lots: one row per lot of an announcement
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS silver.lots (
-    lot_id            BIGINT         GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    starting_price    NUMERIC(14, 2),                            -- earliest round offered in the announcement; null if not given
-    auction_id        BIGINT         NOT NULL REFERENCES silver.auctions (auction_id) ON DELETE CASCADE,
-    lot_number        INTEGER        NOT NULL,
+    lot_id            BIGINT          GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    starting_price    NUMERIC(14, 2)  NOT NULL CHECK (starting_price >= 0),  -- earliest round offered in the announcement
+    auction_id        BIGINT          NOT NULL REFERENCES silver.auctions (auction_id) ON DELETE CASCADE,
+    lot_number        INTEGER         NOT NULL,
     UNIQUE (auction_id, lot_number)
 );
+
+COMMENT ON COLUMN silver.lots.starting_price IS 'Starting price for the CURRENT auction.';
 
 -- -----------------------------------------------------------------------------
 -- municipios
@@ -49,7 +51,7 @@ CREATE TABLE IF NOT EXISTS silver.municipios (
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS silver.catastral_references (
     catastral_reference_id  BIGINT            GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    catastral_reference     VARCHAR(20)       NOT NULL UNIQUE,   -- no spaces, uppercase; references of any other length are not stored
+    catastral_reference     VARCHAR(20)       NOT NULL UNIQUE CHECK (char_length(catastral_reference) = 20),  -- no spaces, uppercase; references of any other length are not stored
     latitude                DOUBLE PRECISION  NOT NULL,
     longitude               DOUBLE PRECISION  NOT NULL,
     use                     VARCHAR(100)      NOT NULL,
