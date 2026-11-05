@@ -22,7 +22,7 @@ import anthropic
 import requests
 
 from ..clients.goolzoom import CatastroInfo, lookup_reference, normalize_reference
-from ..clients.llm import Announcement, extract_info_announcement
+from ..clients.llm import PROMPT_HASH, Announcement, extract_info_announcement
 from .common import read_sql
 
 logger = logging.getLogger(__name__)
@@ -84,20 +84,26 @@ def _get_reference_id(cursor, raw_reference: str, boe_ref: str, lot_number: int)
     return _insert_reference(cursor, info)
 
 
-def _reject_announcement(cursor, boe_ref: str, reason: str) -> None:
+def _reject_announcement(cursor, boe_ref: str, reason: str, extraction_model: str) -> None:
     """Record a rejected announcement, so it isn't sent to Claude again on the next run"""
     cursor.execute(
         read_sql("insert_silver_rejected_announcement.sql"),
-        {"boe_ref": boe_ref, "reason": reason},
+        {
+            "boe_ref": boe_ref,
+            "reason": reason,
+            "extraction_model": extraction_model,
+            "extraction_prompt_hash": PROMPT_HASH,
+        },
     )
 
 
-def _store_auction(cursor, bronze_row: dict, announcement: Announcement) -> bool:
+def _store_auction(cursor, bronze_row: dict, announcement: Announcement, extraction_model: str) -> bool:
     """
     Return True if the auction was stored, or False if it was rejected for having no valid lots
 
     bronze_row: Info about the auction already stored in Bronze layer (using BOE API)
     Announcement: Contains the info extracted from the auction usign Claude API
+    extraction_model: Model that produced the announcement
     """
     valid_lots = []
     for lot in announcement.lots:
@@ -140,13 +146,18 @@ def _store_auction(cursor, bronze_row: dict, announcement: Announcement) -> bool
     if not valid_lots:
         logger.warning("REJECTED %s: the auction has no valid lot (Claude found %d lots)",
                        bronze_row["boe_ref"], len(announcement.lots))
-        _reject_announcement(cursor, bronze_row["boe_ref"], "No valid lots")
+        _reject_announcement(cursor, bronze_row["boe_ref"], "No valid lots", extraction_model)
         return False
 
     ##########################
     # 2. Insert auction in silver.auctions
     ##########################
-    cursor.execute(read_sql("insert_silver_auction.sql"), {**bronze_row, "held_date": announcement.held_date})
+    cursor.execute(read_sql("insert_silver_auction.sql"), {
+        **bronze_row,
+        "held_date": announcement.held_date,
+        "extraction_model": extraction_model,
+        "extraction_prompt_hash": PROMPT_HASH,
+    })
     auction_id = cursor.fetchone()[0]
 
     for lot, valid_reference_ids in valid_lots:
@@ -212,7 +223,7 @@ def load_silver(conn) -> dict:
             ######################################
             # 2. Call Claude API to extract info in a structured way
             ######################################
-            announcement = extract_info_announcement(pending_auction["announcement_text"])
+            announcement, extraction_model = extract_info_announcement(pending_auction["announcement_text"])
 
             ######################################
             # Reject it if it has no held date
@@ -220,7 +231,7 @@ def load_silver(conn) -> dict:
             if announcement.held_date is None:
                 logger.warning("REJECTED %s: the announcement has no held date", boe_ref)
                 with conn.cursor() as cursor:
-                    _reject_announcement(cursor, boe_ref, "No held date")
+                    _reject_announcement(cursor, boe_ref, "No held date", extraction_model)
                 conn.commit()
                 rejected.append(boe_ref)
                 continue
@@ -229,7 +240,7 @@ def load_silver(conn) -> dict:
             ######################################
             # 3. Store auction and its lots and ref catastrales 
             ######################################
-                stored = _store_auction(cursor, pending_auction, announcement)
+                stored = _store_auction(cursor, pending_auction, announcement, extraction_model)
             # One transaction per announcement: it's stored whole or not at all, and a
             # rerun doesn't pay Claude again for the ones already stored
             conn.commit()

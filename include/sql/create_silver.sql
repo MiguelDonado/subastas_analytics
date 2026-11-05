@@ -19,8 +19,13 @@ CREATE TABLE IF NOT EXISTS silver.auctions (
     publication_date  DATE         NOT NULL,
     held_date         DATE         NOT NULL,                     
     ingested_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    source_url        TEXT         NOT NULL UNIQUE
+    source_url        TEXT         NOT NULL UNIQUE,
+    extraction_model          VARCHAR(100)  NOT NULL,
+    extraction_prompt_hash    VARCHAR(12)   NOT NULL
 );
+
+COMMENT ON COLUMN silver.auctions.extraction_model IS 'Claude model that produced this extraction. It can be a fallback instead of the model requested.';
+COMMENT ON COLUMN silver.auctions.extraction_prompt_hash IS 'Hash of the extraction instructions (PROMPT_HASH in clients/llm.py). Changes when the prompt or the output schema changes.';
 
 -- -----------------------------------------------------------------------------
 -- lots: one row per lot of an announcement
@@ -76,7 +81,11 @@ CREATE TABLE IF NOT EXISTS silver.lots_catastral_references (
 CREATE TABLE IF NOT EXISTS silver.rejected_announcements (
     boe_ref      VARCHAR(30)  PRIMARY KEY,
     reason       TEXT         NOT NULL,                 -- 
-    rejected_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+    rejected_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    extraction_model          VARCHAR(100)  NOT NULL,
+    extraction_prompt_hash    VARCHAR(12)   NOT NULL
 );
 
 COMMENT ON COLUMN silver.rejected_announcements.reason IS 'No held date or no valid lots';
+COMMENT ON COLUMN silver.rejected_announcements.extraction_model IS 'Claude model that produced the extraction this rejection is based on. It can be a fallback instead of the model requested.';
+COMMENT ON COLUMN silver.rejected_announcements.extraction_prompt_hash IS 'Hash of the extraction instructions (PROMPT_HASH in clients/llm.py). Changes when the prompt or the output schema changes.';
