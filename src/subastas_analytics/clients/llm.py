@@ -1,8 +1,11 @@
 """Classify auctions and extract relevant information from the announcement text of a BOE Auction using Claude."""
 
+import hashlib
+import json
 from datetime import date
 
 import anthropic
+from anthropic.types.beta import BetaFallbackMessageIterationUsage
 from pydantic import BaseModel, Field
 
 MODEL = "claude-opus-5-5"
@@ -73,8 +76,35 @@ class Announcement(BaseModel):
     lots: list[Lot]
 
 
-def extract_info_announcement(text: str) -> Announcement:
-    """Ask Claude to extract the lots of an announcement, validated against `Announcement`."""
+# Short fingerprint of the extraction instructions. It changes by itself whenever
+# SYSTEM_PROMPT or the Announcement schema changes.
+PROMPT_HASH = hashlib.sha256(
+    (SYSTEM_PROMPT + json.dumps(Announcement.model_json_schema(), sort_keys=True)).encode()
+).hexdigest()[:12]
+
+
+def _serving_model(response) -> str:
+    """Return the model that produced the response, which is a different one after a fallback.
+
+    The API can list the attempts behind a response in `response.usage.iterations`:
+    - A normal request may have no list at all (None), which is why the loop uses `or []`.
+    - An attempt that was refused is added as a normal entry, even if it used a fallback model.
+    - The fallback attempt that produced the final answer is added as an object of type
+      `BetaFallbackMessageIterationUsage`, and its `model` is the model that answered.
+
+    If no entry has that type, no fallback produced the answer, so the model is `response.model`.
+    """
+    for iteration in response.usage.iterations or []:
+        if isinstance(iteration, BetaFallbackMessageIterationUsage):
+            return iteration.model
+    return response.model
+
+
+def extract_info_announcement(text: str) -> tuple[Announcement, str]:
+    """Ask Claude to extract the lots of an announcement, validated against `Announcement`.
+
+    Returns the extracted data and the model that produced it.
+    """
     client = anthropic.Anthropic()
 
     # Streaming: long announcements can take minutes, and the SDK requires it for high max_tokens.
@@ -108,4 +138,4 @@ def extract_info_announcement(text: str) -> Announcement:
         raise RuntimeError(f"Claude declined the request: {response.stop_details}")
     if response.stop_reason == "max_tokens":
         raise RuntimeError("Response was cut off by max_tokens; the announcement may have too many lots")
-    return response.parsed_output
+    return response.parsed_output, _serving_model(response)
