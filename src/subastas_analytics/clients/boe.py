@@ -4,12 +4,15 @@ Discover Hacienda auctions from the BOE Open Data API daily summary
 BOE API: https://www.boe.es/datosabiertos/api/api.php
 """
 
+import logging
 from datetime import date, datetime
 
 import requests
 from lxml import etree
 
-from ..config import AUCTION_TITLE_RE, BOE_SUMARIO_ENDPOINT, NON_AUCTION_TITLE_RE
+from ..config import AUCTION_TITLE_RE, BOE_SUMARIO_ENDPOINT, NEAR_MISS_TITLE_RE, NON_AUCTION_TITLE_RE
+
+logger = logging.getLogger(__name__)
 
 
 def _fetch_boe_sumario(fecha: date, timeout: float = 30) -> bytes | None:
@@ -40,6 +43,9 @@ def _parse_auction_candidates(sumario_xml: bytes) -> list[tuple[str,str]]:
         titulo = item.findtext("titulo", default="")
         # regex.search: Returns a match object if there is a match anywhere on the string
         if not AUCTION_TITLE_RE.search(titulo):
+            # Not skipped silently: if the wording of the titles changes, they show up in the log
+            if NEAR_MISS_TITLE_RE.search(titulo):
+                logger.warning("NEAR MISS: title mentions Hacienda and subasta but doesn't match AUCTION_TITLE_RE: %s", titulo)
             continue
         # Skip corrections, suspensions, cancellations... of an earlier auction
         if NON_AUCTION_TITLE_RE.search(titulo):

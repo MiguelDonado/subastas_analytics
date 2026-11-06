@@ -30,6 +30,12 @@ NON_AUCTION_TITLE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Near miss: missed by a small margin. AUCTION_TITLE_RE misses these titles, but only just.
+# Titles that look like a Hacienda auction but don't match AUCTION_TITLE_RE. They're only logged,
+# so a change in the wording shows up in the Airflow log. Just "subasta" would log 100+ titles a week
+# (Seguridad Social, Ministerio de Cultura...), while this one logged none between August and October 2026.
+NEAR_MISS_TITLE_RE = re.compile(r"Hacienda.*\bsubasta", re.IGNORECASE | re.DOTALL)
+
 ##########################
 # Goolzoom
 ##########################
