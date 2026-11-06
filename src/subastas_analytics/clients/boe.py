@@ -84,15 +84,27 @@ def fetch_auction_candidates(fecha: date) -> list[tuple[str, str]]:
     # The regexes are free and discard most titles. Claude catches the wording they don't cover
     return _parse_auction_candidates(sumario_xml)
 
-def _fetch_announcement(xml_url: str, timeout: float = 30) -> bytes:
-    """Return the raw XML summary for `xml_url`"""
+def fetch_announcement_xml(xml_url: str, timeout: float = 30) -> bytes:
+    """
+    Return the raw XML of the announcement at `xml_url`, without parsing it.
+
+    Downloading and parsing are separate so the DAG can download every candidate before calling Claude,
+    and only parse the ones Claude confirms are auctions.
+    """
     response = requests.get(xml_url,timeout=timeout)
     response.raise_for_status()
     return response.content
 
-def _get_announcement_boe_ref(root: etree._Element) -> str:
-    """Returns the BOE reference (id) for that auction announcement"""
-    boe_ref = root.findtext("metadatos/identificador")
+def _get_announcement_boe_ref(root: etree._Element, xml_url: str) -> str:
+    """
+    Returns the BOE reference (id) for that auction announcement
+
+    Raises ValueError if it's missing, so it fails here with a clear message
+    (B12 in docs/6.failure_modes.md).
+    """
+    boe_ref = (root.findtext("metadatos/identificador") or "").strip()
+    if not boe_ref:
+        raise ValueError(f"Announcement {xml_url} has no metadatos/identificador")
     return boe_ref
 
 def _get_announcement_text(root: etree._Element, boe_ref: str) -> str:
@@ -133,10 +145,18 @@ def _get_announcement_publication_date(root: etree._Element) -> date:
 
 
 def fetch_auction(xml_url: str) -> dict:
-    """Return a dictionary with the relevant information for the auction according the bronze layer"""
-    auction_xml = _fetch_announcement(xml_url)
+    """Download and parse the announcement at `xml_url`. Used by the scripts; the DAG does both steps separately."""
+    return parse_auction(fetch_announcement_xml(xml_url), xml_url)
+
+
+def parse_auction(auction_xml: bytes, xml_url: str) -> dict:
+    """
+    Return a dictionary with the relevant information for the auction according the bronze layer
+
+    Raises ValueError if the announcement has no boe_ref or no text 
+    """
     root = etree.fromstring(auction_xml)
-    boe_ref = _get_announcement_boe_ref(root)
+    boe_ref = _get_announcement_boe_ref(root, xml_url)
     announcement_text = _get_announcement_text(root, boe_ref)
     publication_date = _get_announcement_publication_date(root)
     return {

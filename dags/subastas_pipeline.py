@@ -67,7 +67,7 @@ from airflow.sdk import dag, task, task_group
 from airflow.sdk.exceptions import AirflowFailException
 from pendulum import datetime
 
-from subastas_analytics.clients.boe import fetch_auction, fetch_auction_candidates
+from subastas_analytics.clients.boe import fetch_announcement_xml, fetch_auction_candidates, parse_auction
 from subastas_analytics.clients.llm import is_auction_title
 from subastas_analytics.config import SQL_DIR
 from subastas_analytics.loaders.bronze import insert_auctions
@@ -123,7 +123,8 @@ def subastas_pipeline():
         @task
         def fetch_auctions(logical_date=None) -> list[dict]:
             """
-            Downloads all the auctions published in the 7 days before the run's Monday
+            Downloads the raw XML of all the auctions published in the 7 days before the run's Monday.
+            Returns a list of {"url", "xml"}: parse_auctions parses them.
 
             Every BOE call comes before any Claude call, so if the BOE fails,
             the retry doesn't pay Claude again for titles it already classified.
@@ -153,13 +154,33 @@ def subastas_pipeline():
                     "still matches the titles: look for NEAR MISS lines in this log, or search the BOE."
                 )
 
-            # 2. BOE: announcements of every candidate (free, a few are discarded later)
-            downloaded = [(title, fetch_auction(url)) for title, url in candidates]
+            # 2. BOE: raw XML of every candidate (free, a few are discarded later)
+            downloaded = [(title, url, fetch_announcement_xml(url)) for title, url in candidates]
 
-            # 3. Claude: keep only the real auctions
-            auctions = [auction for title, auction in downloaded if is_auction_title(title)]
+            # 3. Claude: keep only the real auctions.
+            # The XML is returned as text because XCom stores the return value as JSON, and bytes aren't JSON
+            accepted = [
+                {"url": url, "xml": xml.decode("utf-8")}
+                for title, url, xml in downloaded
+                if is_auction_title(title)
+            ]
 
-            print(f"Fetched {len(auctions)} auctions out of {len(candidates)} candidates")
+            rejected = len(candidates) - len(accepted)
+            print(
+                f"{len(candidates)} titles passed the regexes. Claude confirmed {len(accepted)} as auctions "
+                f"and rejected {rejected} (see the NOT AN AUCTION lines)"
+            )
+            return accepted
+
+        # Parsing is its own task, and only runs on the titles Claude confirmed as auctions,
+        # so a malformed announcement that isn't an auction never fails the week.
+        # If it fails (no boe_ref, no text...), fetch_auctions already succeeded and its XCom is stored,
+        # so Claude isn't called again, neither on a retry nor when the run is cleared with "Only failed".
+        # retries=0: a parse error gives the same result on every attempt, so it alerts right away
+        @task(retries=0)
+        def parse_auctions(accepted: list[dict]) -> list[dict]:
+            auctions = [parse_auction(a["xml"].encode("utf-8"), a["url"]) for a in accepted]
+            print(f"Parsed {len(auctions)} auctions")
             return auctions
 
         @task
@@ -172,7 +193,7 @@ def subastas_pipeline():
             print(f"Inserted {inserted}, skipped {len(auctions) - inserted}")
             return inserted
 
-        auctions = fetch_auctions()
+        auctions = parse_auctions(fetch_auctions())
         loaded = load_auctions(auctions)
         create_table >> loaded
 
