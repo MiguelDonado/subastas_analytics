@@ -10,7 +10,12 @@ from datetime import date, datetime
 import requests
 from lxml import etree
 
-from ..config import AUCTION_TITLE_RE, BOE_SUMARIO_ENDPOINT, NEAR_MISS_TITLE_RE, NON_AUCTION_TITLE_RE
+from ..config import (
+    AUCTION_TITLE_RE,
+    BOE_SUMARIO_ENDPOINT,
+    NEAR_MISS_TITLE_RE,
+    NON_AUCTION_TITLE_RE,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,11 +95,17 @@ def _get_announcement_boe_ref(root: etree._Element) -> str:
     boe_ref = root.findtext("metadatos/identificador")
     return boe_ref
 
-def _get_announcement_text(root: etree._Element) -> str:
-    """Returns the text for auction, including the rows of any table"""
+def _get_announcement_text(root: etree._Element, boe_ref: str) -> str:
+    """
+    Returns the text for auction, including the rows of any table
+
+    Raises ValueError if there is no text: silver can't extract anything from it, and failing
+    alerts instead of storing an empty announcement. The retries get the same XML, so the task
+    fails and healthchecks.io alerts (B11 in docs/6.failure_modes.md).
+    """
     texto = root.find("texto")
     if texto is None:
-        return ""
+        raise ValueError(f"Announcement {boe_ref} has no <texto>")
     blocks = []
     # Iterate over direct children of "texto" in document order (p, table, ...)
     for element in texto:
@@ -108,7 +119,10 @@ def _get_announcement_text(root: etree._Element) -> str:
                 blocks.append(" | ".join(cells))
         else:
             blocks.append("".join(element.itertext()).strip())
-    return "\n".join(b for b in blocks if b)
+    text = "\n".join(b for b in blocks if b)
+    if not text:
+        raise ValueError(f"Announcement {boe_ref} has an empty <texto>")
+    return text
 
 
 def _get_announcement_publication_date(root: etree._Element) -> date:
@@ -123,7 +137,7 @@ def fetch_auction(xml_url: str) -> dict:
     auction_xml = _fetch_announcement(xml_url)
     root = etree.fromstring(auction_xml)
     boe_ref = _get_announcement_boe_ref(root)
-    announcement_text = _get_announcement_text(root)
+    announcement_text = _get_announcement_text(root, boe_ref)
     publication_date = _get_announcement_publication_date(root)
     return {
         "boe_ref": boe_ref,
