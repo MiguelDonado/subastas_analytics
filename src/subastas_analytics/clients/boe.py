@@ -50,9 +50,13 @@ def _parse_auction_candidates(sumario_xml: bytes) -> list[tuple[str,str]]:
         # Skip corrections, suspensions, cancellations... of an earlier auction
         if NON_AUCTION_TITLE_RE.search(titulo):
             continue
-        url_xml = item.findtext("url_xml")
-        if url_xml:
-            candidates.append((titulo, url_xml.strip()))
+        url_xml = item.findtext("url_xml", default="").strip()
+        # Never seen (0 of 40,593 items in 2025 and 2026). Skipped instead of raising, so one bad item
+        # doesn't block the whole week. If the BOE stops sending it for every item, B17 alerts
+        if not url_xml:
+            logger.warning("NO URL_XML: auction candidate skipped because it has no url_xml: %s", titulo)
+            continue
+        candidates.append((titulo, url_xml))
     return candidates
 
 
