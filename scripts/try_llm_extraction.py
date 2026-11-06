@@ -12,7 +12,7 @@ load_dotenv()  # Reads ANTHROPIC_API_KEY from .env
 
 test_date = "2026-10-21"
 candidates = fetch_auction_candidates(date.fromisoformat(test_date))
-urls = [url for title, url in candidates if is_auction_title(title)]
+urls = [url for _, title, url in candidates if is_auction_title(title)]
 for url in urls:
     auction = fetch_auction(url)
     announcement, extraction_model = extract_info_announcement(auction["announcement_text"])

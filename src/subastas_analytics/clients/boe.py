@@ -38,8 +38,13 @@ def _fetch_boe_sumario(fecha: date, timeout: float = 30) -> bytes | None:
     response.raise_for_status()
     return response.content
 
-def _parse_auction_candidates(sumario_xml: bytes) -> list[tuple[str,str]]:
-    """Return the (title,`url_xml`) of every item whose title announces a Delegación de Economía y Hacienda auction."""
+def _parse_auction_candidates(sumario_xml: bytes) -> list[tuple[str, str, str]]:
+    """
+    Return the (boe_ref, title, `url_xml`) of every item whose title announces a Delegación de Economía y Hacienda auction.
+
+    boe_ref is the item's `identificador`, the same value as the announcement's `metadatos/identificador`
+    (checked on the BOE data), so the DAG can skip the announcements already in bronze before downloading them.
+    """
     root = etree.fromstring(sumario_xml)
     candidates = []
     # Iterate over all item elements
@@ -61,13 +66,18 @@ def _parse_auction_candidates(sumario_xml: bytes) -> list[tuple[str,str]]:
         if not url_xml:
             logger.warning("NO URL_XML: auction candidate skipped because it has no url_xml: %s", titulo)
             continue
-        candidates.append((titulo, url_xml))
+        boe_ref = item.findtext("identificador", default="").strip()
+        # Same as url_xml (B5): never seen (0 of 2,530 items checked), so skipped and logged
+        if not boe_ref:
+            logger.warning("NO IDENTIFICADOR: auction candidate skipped because it has no identificador: %s", titulo)
+            continue
+        candidates.append((boe_ref, titulo, url_xml))
     return candidates
 
 
-def fetch_auction_candidates(fecha: date) -> list[tuple[str, str]]:
+def fetch_auction_candidates(fecha: date) -> list[tuple[str, str, str]]:
     """
-    Return the (title, `url_xml`) of the items whose title passes the regexes that day.
+    Return the (boe_ref, title, `url_xml`) of the items whose title passes the regexes that day.
 
     Claude isn't called here, so a BOE failure never wastes a Claude call.
     The caller asks Claude about each title once every BOE call is done.
