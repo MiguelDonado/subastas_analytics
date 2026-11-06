@@ -8,7 +8,7 @@ def insert_auctions(conn, auctions: list[dict]) -> int:
 
     Parameters:
     - conn: Open psycopg2 connection. The caller closes it.
-    - auctions: The dictionaries that fetch_auction returns.
+    - auctions: The dictionaries that parse_auction returns.
     """
     insert_sql = read_sql("insert_bronze_auction.sql")
     inserted = 0
