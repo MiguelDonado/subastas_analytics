@@ -47,7 +47,7 @@ def is_auction_title(title: str) -> bool:
 
     # Raise instead of guessing: an Airflow retry is better than keeping or losing an announcement by mistake
     if response.stop_reason == "refusal":
-        raise RuntimeError(f"Claude declined the request: {response.stop_details}")
+        raise RuntimeError(f"Claude declined the request for title: {title}. {response.stop_details}")
     if response.stop_reason == "max_tokens":
         raise RuntimeError(f"Response was cut off by max_tokens for title: {title}")
 
