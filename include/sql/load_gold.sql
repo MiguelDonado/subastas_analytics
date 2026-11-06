@@ -30,10 +30,10 @@ SELECT auction_id, boe_ref, announcement_text, source_url
 FROM silver.auctions;
 
 INSERT INTO gold.dim_catastral_references
-    (catastral_reference_id, catastral_reference, latitude, longitude, use, class, surface, municipio, province)
+    (catastral_reference_id, catastral_reference, latitude, longitude, use, class, surface, qualification, municipio, province)
 SELECT
     r.catastral_reference_id, r.catastral_reference, r.latitude, r.longitude,
-    r.use, r.class, r.surface, m.municipio, m.province
+    r.use, r.class, r.surface, r.qualification, m.municipio, m.province
 FROM silver.catastral_references r
 JOIN silver.municipios m USING (municipio_id);
 

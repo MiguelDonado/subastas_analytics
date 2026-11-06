@@ -66,7 +66,8 @@ from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.sdk import dag, task, task_group
 from pendulum import datetime
 
-from subastas_analytics.clients.boe import fetch_auction, fetch_auction_urls
+from subastas_analytics.clients.boe import fetch_auction, fetch_auction_candidates
+from subastas_analytics.clients.llm import is_auction_title
 from subastas_analytics.config import SQL_DIR
 from subastas_analytics.loaders.bronze import insert_auctions
 from subastas_analytics.loaders.silver import load_silver
@@ -114,7 +115,10 @@ def subastas_pipeline():
         def fetch_auctions(logical_date=None) -> list[dict]:
             """
             Downloads all the auctions published in the 7 days before the run's Monday
-            
+
+            Every BOE call comes before any Claude call, so if the BOE fails,
+            the retry doesn't pay Claude again for titles it already classified.
+
             Parameters:
             - logical_date: We never pass logical_date. 
                             When Airflow runs a task, it looks at the functions parameter names,
@@ -122,13 +126,19 @@ def subastas_pipeline():
                             logical_date = this run's date
             """
             monday = logical_date.date()
-            auctions = []
-            for days_back in range(7,0,-1):
-                particular_date = monday - timedelta(days=days_back)
-                for url in fetch_auction_urls(particular_date):
-                    auction = fetch_auction(url)
-                    auctions.append(auction)
-            print(f"Fetched {len(auctions)} auctions")
+
+            # 1. BOE: summaries of the 7 days (free)
+            candidates = []
+            for days_back in range(7, 0, -1):
+                candidates += fetch_auction_candidates(monday - timedelta(days=days_back))
+
+            # 2. BOE: announcements of every candidate (free, a few are discarded later)
+            downloaded = [(title, fetch_auction(url)) for title, url in candidates]
+
+            # 3. Claude: keep only the real auctions
+            auctions = [auction for title, auction in downloaded if is_auction_title(title)]
+
+            print(f"Fetched {len(auctions)} auctions out of {len(candidates)} candidates")
             return auctions
 
         @task

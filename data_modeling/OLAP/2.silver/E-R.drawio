@@ -228,7 +228,7 @@
           </mxGeometry>
         </mxCell>
         <mxCell id="OrPePs-839_MGphjW3eC-10" parent="1" style="shape=table;startSize=30;container=1;collapsible=1;childLayout=tableLayout;fixedRows=1;rowLines=0;fontStyle=1;align=center;resizeLast=1;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="&amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp;&amp;nbsp;" vertex="1">
-          <mxGeometry height="270" width="180" x="305" y="240" as="geometry" />
+          <mxGeometry height="300" width="180" x="305" y="240" as="geometry" />
         </mxCell>
         <mxCell id="OrPePs-839_MGphjW3eC-11" parent="OrPePs-839_MGphjW3eC-10" style="shape=tableRow;horizontal=0;startSize=0;swimlaneHead=0;swimlaneBody=0;fillColor=none;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;" value="" vertex="1">
           <mxGeometry height="30" width="180" y="30" as="geometry" />
@@ -321,8 +321,21 @@
             <mxRectangle height="30" width="150" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="OrPePs-839_MGphjW3eC-32" parent="OrPePs-839_MGphjW3eC-10" style="shape=tableRow;horizontal=0;startSize=0;swimlaneHead=0;swimlaneBody=0;fillColor=none;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=0;" value="" vertex="1">
+        <mxCell id="YIZZGR7lv_QP3t3KWA4Q-1" parent="OrPePs-839_MGphjW3eC-10" style="shape=tableRow;horizontal=0;startSize=0;swimlaneHead=0;swimlaneBody=0;fillColor=none;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=0;" value="" vertex="1">
           <mxGeometry height="30" width="180" y="240" as="geometry" />
+        </mxCell>
+        <mxCell id="YIZZGR7lv_QP3t3KWA4Q-2" parent="YIZZGR7lv_QP3t3KWA4Q-1" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;editable=1;overflow=hidden;whiteSpace=wrap;html=1;" value="" vertex="1">
+          <mxGeometry height="30" width="30" as="geometry">
+            <mxRectangle height="30" width="30" as="alternateBounds" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="YIZZGR7lv_QP3t3KWA4Q-3" parent="YIZZGR7lv_QP3t3KWA4Q-1" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;overflow=hidden;whiteSpace=wrap;html=1;" value="qualification" vertex="1">
+          <mxGeometry height="30" width="150" x="30" as="geometry">
+            <mxRectangle height="30" width="150" as="alternateBounds" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="OrPePs-839_MGphjW3eC-32" parent="OrPePs-839_MGphjW3eC-10" style="shape=tableRow;horizontal=0;startSize=0;swimlaneHead=0;swimlaneBody=0;fillColor=none;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=0;" value="" vertex="1">
+          <mxGeometry height="30" width="180" y="270" as="geometry" />
         </mxCell>
         <mxCell id="OrPePs-839_MGphjW3eC-33" parent="OrPePs-839_MGphjW3eC-32" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;editable=1;overflow=hidden;whiteSpace=wrap;html=1;" value="fk" vertex="1">
           <mxGeometry height="30" width="30" as="geometry">
@@ -388,7 +401,7 @@
           <mxGeometry height="30" width="120" x="-40" y="100" as="geometry" />
         </mxCell>
         <mxCell id="yO2tQtu3hJjXuVJsOb0L-1" parent="1" style="shape=table;startSize=30;container=1;collapsible=1;childLayout=tableLayout;fixedRows=1;rowLines=0;fontStyle=1;align=center;resizeLast=1;html=1;fillColor=#f8cecc;strokeColor=#b85450;" value="rejected_announcements" vertex="1">
-          <mxGeometry height="180" width="190" x="780" y="450" as="geometry" />
+          <mxGeometry height="180" width="190" x="780" y="420" as="geometry" />
         </mxCell>
         <mxCell id="yO2tQtu3hJjXuVJsOb0L-2" parent="yO2tQtu3hJjXuVJsOb0L-1" style="shape=tableRow;horizontal=0;startSize=0;swimlaneHead=0;swimlaneBody=0;fillColor=none;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;" value="" vertex="1">
           <mxGeometry height="30" width="190" y="30" as="geometry" />
