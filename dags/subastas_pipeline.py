@@ -64,6 +64,7 @@ import requests
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.sdk import dag, task, task_group
+from airflow.sdk.exceptions import AirflowFailException
 from pendulum import datetime
 
 from subastas_analytics.clients.boe import fetch_auction, fetch_auction_candidates
@@ -78,6 +79,14 @@ def _ping_failure(context):
     Alerts you right away. It also stops a failed catchup run from being hidden when another run succeeds in the same window.
     """
     requests.get(f"{os.environ['HEALTHCHECK_URL']}/fail", timeout = 10)
+
+
+def _week_candidates(monday) -> list[tuple[str, str]]:
+    """Return the (title, url_xml) candidates of the 7 days before `monday`. Only calls the BOE, so it's free."""
+    candidates = []
+    for days_back in range(7, 0, -1):
+        candidates += fetch_auction_candidates(monday - timedelta(days=days_back))
+    return candidates
 
 
 @dag(
@@ -128,9 +137,21 @@ def subastas_pipeline():
             monday = logical_date.date()
 
             # 1. BOE: summaries of the 7 days (free)
-            candidates = []
-            for days_back in range(7, 0, -1):
-                candidates += fetch_auction_candidates(monday - timedelta(days=days_back))
+            candidates = _week_candidates(monday)
+
+            # A week with 0 candidates is common (about 1 in 7), but 2 in a row suggests AUCTION_TITLE_RE
+            # no longer matches (the ministry was renamed, the wording changed...).
+            # Without this check, every run would succeed with 0 auctions and no one would notice.
+            # 2 weeks gives 1 or 2 false alarms a year (August), accepted on purpose: some auctions give only
+            # ~3 weeks to present offers, so a higher threshold would alert too late.
+            # See "Why B17 alerts after 2 weeks" in docs/6.failure_modes.md.
+            # AirflowFailException fails the task without retries (they would give the same result),
+            # so on_failure_callback pings /fail right away.
+            if not candidates and not _week_candidates(monday - timedelta(days=7)):
+                raise AirflowFailException(
+                    "No auction candidates in the BOE for 2 weeks in a row. Check that AUCTION_TITLE_RE "
+                    "still matches the titles: look for NEAR MISS lines in this log, or search the BOE."
+                )
 
             # 2. BOE: announcements of every candidate (free, a few are discarded later)
             downloaded = [(title, fetch_auction(url)) for title, url in candidates]
