@@ -2,11 +2,14 @@
 
 import hashlib
 import json
+import logging
 from datetime import date
 
 import anthropic
 from anthropic.types.beta import BetaFallbackMessageIterationUsage
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 MODEL = "claude-opus-5-5"
 
@@ -47,7 +50,13 @@ def is_auction_title(title: str) -> bool:
         raise RuntimeError(f"Claude declined the request: {response.stop_details}")
     if response.stop_reason == "max_tokens":
         raise RuntimeError(f"Response was cut off by max_tokens for title: {title}")
-    return response.parsed_output.is_auction
+
+    is_auction = response.parsed_output.is_auction
+    # The regexes are already restrictive, so a title that passes them is expected to be an auction.
+    # A rejection is a surprise, so it's logged to be checked
+    if not is_auction:
+        logger.warning("NOT AN AUCTION: title passed the regexes but Claude rejected it: %s", title)
+    return is_auction
 
 SYSTEM_PROMPT = """\
 You extract structured data from Spanish BOE announcements of public auctions \
