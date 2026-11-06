@@ -3,17 +3,17 @@
 from .common import read_sql
 
 
-def stored_source_urls(conn, urls: list[str]) -> set[str]:
-    """Return which of `urls` are already stored as source_url in bronze.auctions.
+def stored_boe_refs(conn, boe_refs: list[str]) -> set[str]:
+    """Return which of `boe_refs` are already stored in bronze.auctions.
 
     Parameters:
     - conn: Open psycopg2 connection. The caller closes it.
-    - urls: The url_xml of the candidates.
+    - boe_refs: The boe_ref (summary `identificador`) of the candidates.
     """
-    if not urls:
+    if not boe_refs:
         return set()
     with conn.cursor() as cursor:
-        cursor.execute(read_sql("select_bronze_stored_urls.sql"), {"urls": urls})
+        cursor.execute(read_sql("select_bronze_stored_boe_refs.sql"), {"boe_refs": boe_refs})
         return {row[0] for row in cursor.fetchall()}
 
 

@@ -1,4 +1,4 @@
--- Named placeholders, so I can pass the dictionary that fetch_auction returns
+-- Named placeholders, so I can pass the dictionary that parse_auction returns
 -- straight to cursor.execute(insert_sql, auction).
 -- Positional placeholders are also valid, but values are then matched by position,
 -- so I would have to pass a tuple in the right order.

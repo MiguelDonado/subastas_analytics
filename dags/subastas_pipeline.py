@@ -74,7 +74,7 @@ from subastas_analytics.clients.boe import (
 )
 from subastas_analytics.clients.llm import is_auction_title
 from subastas_analytics.config import SQL_DIR
-from subastas_analytics.loaders.bronze import insert_auctions, stored_source_urls
+from subastas_analytics.loaders.bronze import insert_auctions, stored_boe_refs
 from subastas_analytics.loaders.silver import load_silver
 
 
@@ -85,8 +85,8 @@ def _ping_failure(context):
     requests.get(f"{os.environ['HEALTHCHECK_URL']}/fail", timeout = 10)
 
 
-def _week_candidates(monday) -> list[tuple[str, str]]:
-    """Return the (title, url_xml) candidates of the 7 days before `monday`. Only calls the BOE, so it's free."""
+def _week_candidates(monday) -> list[tuple[str, str, str]]:
+    """Return the (boe_ref, title, url_xml) candidates of the 7 days before `monday`. Only calls the BOE, so it's free."""
     candidates = []
     for days_back in range(7, 0, -1):
         candidates += fetch_auction_candidates(monday - timedelta(days=days_back))
@@ -162,15 +162,17 @@ def subastas_pipeline():
             # or pay Claude again for them. It comes after the B17 check on purpose: a rerun of a week
             # whose auctions are all stored would otherwise look like 0 candidates and alert.
             # Titles Claude rejected (B6) aren't stored, so a rerun still asks about those.
+            # It compares by boe_ref, the same key as the ON CONFLICT of the insert. ON CONFLICT stays:
+            # this check only avoids the cost, the constraint ON CONFLICT is what guarantees no duplicates (B14)
             conn = PostgresHook(postgres_conn_id="subastas_db").get_conn()
             try:
-                stored = stored_source_urls(conn, [url for _, url in candidates])
+                stored = stored_boe_refs(conn, [boe_ref for boe_ref, _, _ in candidates])
             finally:
                 conn.close()
-            for title, url in candidates:
-                if url in stored:
-                    print(f"Already in bronze.auctions, skipped (probably a rerun of this week): {url} | {title}")
-            new_candidates = [(title, url) for title, url in candidates if url not in stored]
+            for boe_ref, title, _ in candidates:
+                if boe_ref in stored:
+                    print(f"Already in bronze.auctions, skipped (probably a rerun of this week): {boe_ref} | {title}")
+            new_candidates = [(title, url) for boe_ref, title, url in candidates if boe_ref not in stored]
 
             # 2. BOE: raw XML of every new candidate (free, a few are discarded later)
             downloaded = [(title, url, fetch_announcement_xml(url)) for title, url in new_candidates]
