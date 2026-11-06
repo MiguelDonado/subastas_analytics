@@ -18,24 +18,33 @@ class CatastroInfo:
     reference: str
     municipality: str
     province: str
-    use: str | None                 # Main use: Agrario
+    use: str                        # Main use: Agrario
     property_class: str             # Class: Rustic
     surface: float           
     latitude: float 
     longitude: float
-    
+    qualification: str | None       # Qualification of the biggest crop: MM Pinar maderable
+
 
 def normalize_reference(raw: str) -> str:
     """Make sure reference is correctly written"""
     # Remove non-alphanumeric characters
     return re.sub(r"[^0-9A-Za-z]", "", raw).upper()
 
-def _parse_area(text: str | None) -> float | None:
-    if not text:
-        return None
+def _parse_area(text: str) -> float:
     # html.unescape(): Convert HTML code to the real character
     number = html.unescape(text).split()[0]
     return float(number.replace(".", "").replace(",", "."))
+
+def _main_qualification(crops: list[dict] | None) -> str | None:
+    """Return the qualification of the crop with the biggest area, or None if there are no crops"""
+    if not crops:
+        return None
+    # Lambda function (anonymous function): 
+    # The key argument in max, tell us which value we are going to use when comparing elements
+    # Here the lambda function, takes the argument crop, and returns the area of the element.
+    # Once we have extracted the max element, we return its qualification
+    return max(crops, key=lambda crop: _parse_area(crop["Area"]))["Qualification"]
 
 def _get(path: str, timeout: float = 30) -> requests.Response:
     """Standardize how requests are made"""
@@ -108,7 +117,8 @@ def lookup_reference(raw_reference: str) -> CatastroInfo | None:
         property_class=property["Class"],
         surface=_parse_area(plot["Area of the property"]),
         latitude=float(latitude),
-        longitude=float(longitude)
+        longitude=float(longitude),
+        qualification=_main_qualification(records.get("crops")),
     )
 
 

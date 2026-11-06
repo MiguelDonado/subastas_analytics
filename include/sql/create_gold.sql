@@ -39,9 +39,12 @@ CREATE TABLE IF NOT EXISTS gold.dim_catastral_references (
     use                     VARCHAR(100)      NOT NULL,
     class                   VARCHAR(100)      NOT NULL,
     surface                 NUMERIC(12, 2)    NOT NULL,
+    qualification           VARCHAR(100),                            -- qualification of the biggest crop; NULL if it has no crops
     municipio               VARCHAR(100)      NOT NULL,
     province                VARCHAR(100)      NOT NULL
 );
+
+COMMENT ON COLUMN gold.dim_catastral_references.qualification IS 'Catastro qualification of the crop with the largest area, copied from silver.catastral_references, e.g. MM Pinar maderable. NULL if Goolzoom returned no crops, e.g. an apartment.';
 
 -- -----------------------------------------------------------------------------
 -- fact_lots: one row per lot
@@ -81,7 +84,8 @@ WITH lot_attributes AS (
         mode() WITHIN GROUP (ORDER BY r.province)  AS province,
         mode() WITHIN GROUP (ORDER BY r.municipio) AS municipio,
         mode() WITHIN GROUP (ORDER BY r.use)       AS use,
-        mode() WITHIN GROUP (ORDER BY r.class)     AS class
+        mode() WITHIN GROUP (ORDER BY r.class)     AS class,
+        mode() WITHIN GROUP (ORDER BY r.qualification) AS qualification
     FROM gold.lots_catastral_references_bridge b
     JOIN gold.dim_catastral_references r USING (catastral_reference_id)
     GROUP BY b.lot_id
@@ -119,6 +123,7 @@ SELECT
     attributes.municipio,
     attributes.use,
     attributes.class,
+    attributes.qualification,
     history.auction_rank = 1 AS is_latest
 FROM gold.fact_lots f
 JOIN gold.dim_auctions a USING (auction_id)
@@ -126,3 +131,5 @@ JOIN lot_attributes attributes USING (lot_id)
 JOIN lot_history history USING (lot_id)
 JOIN gold.dim_date publication ON publication.date_id = f.publication_date_id
 LEFT JOIN gold.dim_date held ON held.date_id = f.held_date_id;
+
+COMMENT ON COLUMN gold.app_lots.qualification IS 'Most common qualification among the references of the lot, ignoring NULLs (the first alphabetically if there is a tie). It does not consider surface. NULL if none of the references has a qualification.';

@@ -62,8 +62,11 @@ CREATE TABLE IF NOT EXISTS silver.catastral_references (
     use                     VARCHAR(100)      NOT NULL,
     class                   VARCHAR(100)      NOT NULL,
     surface                 NUMERIC(12, 2)    NOT NULL,
+    qualification           VARCHAR(100),                            -- qualification of the biggest crop; NULL if it has no crops
     municipio_id            BIGINT            NOT NULL REFERENCES silver.municipios (municipio_id)
 );
+
+COMMENT ON COLUMN silver.catastral_references.qualification IS 'Catastro qualification of the crop with the largest area, as returned by Goolzoom, e.g. MM Pinar maderable. A reference can have several crops, but only this one is kept. NULL if Goolzoom returns no crops, e.g. an apartment.';
 
 -- -----------------------------------------------------------------------------
 -- lots_catastral_references: which references each lot contains

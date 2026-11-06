@@ -10,7 +10,6 @@ import requests
 from lxml import etree
 
 from ..config import AUCTION_TITLE_RE, BOE_SUMARIO_ENDPOINT, NON_AUCTION_TITLE_RE
-from .llm import is_auction_title
 
 
 def _fetch_boe_sumario(fecha: date, timeout: float = 30) -> bytes | None:
@@ -51,23 +50,24 @@ def _parse_auction_candidates(sumario_xml: bytes) -> list[tuple[str,str]]:
     return candidates
 
 
-def fetch_auction_urls(fecha: date) -> list[str]:
+def fetch_auction_candidates(fecha: date) -> list[tuple[str, str]]:
     """
-    Return the list of `url_xml` for the auctions published that day
-    
+    Return the (title, `url_xml`) of the items whose title passes the regexes that day.
+
+    Claude isn't called here, so a BOE failure never wastes a Claude call.
+    The caller asks Claude about each title once every BOE call is done.
+
     Special scenarios:
 
-    Situation                          Returns 
+    Situation                          Returns
      No BOE                              []
      No auction candidates               []
-     Candidates, but LLM rejects'em all  []
     """
     sumario_xml = _fetch_boe_sumario(fecha)
     if sumario_xml is None:
         return []
     # The regexes are free and discard most titles. Claude catches the wording they don't cover
-    auction_candidates = _parse_auction_candidates(sumario_xml)
-    return [url for title, url in auction_candidates if is_auction_title(title)]
+    return _parse_auction_candidates(sumario_xml)
 
 def _fetch_announcement(xml_url: str, timeout: float = 30) -> bytes:
     """Return the raw XML summary for `xml_url`"""
