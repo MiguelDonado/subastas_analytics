@@ -67,10 +67,14 @@ from airflow.sdk import dag, task, task_group
 from airflow.sdk.exceptions import AirflowFailException
 from pendulum import datetime
 
-from subastas_analytics.clients.boe import fetch_announcement_xml, fetch_auction_candidates, parse_auction
+from subastas_analytics.clients.boe import (
+    fetch_announcement_xml,
+    fetch_auction_candidates,
+    parse_auction,
+)
 from subastas_analytics.clients.llm import is_auction_title
 from subastas_analytics.config import SQL_DIR
-from subastas_analytics.loaders.bronze import insert_auctions
+from subastas_analytics.loaders.bronze import insert_auctions, stored_source_urls
 from subastas_analytics.loaders.silver import load_silver
 
 
@@ -154,8 +158,22 @@ def subastas_pipeline():
                     "still matches the titles: look for NEAR MISS lines in this log, or search the BOE."
                 )
 
-            # 2. BOE: raw XML of every candidate (free, a few are discarded later)
-            downloaded = [(title, url, fetch_announcement_xml(url)) for title, url in candidates]
+            # Skip the candidates already in bronze, so a rerun of this week doesn't download them
+            # or pay Claude again for them. It comes after the B17 check on purpose: a rerun of a week
+            # whose auctions are all stored would otherwise look like 0 candidates and alert.
+            # Titles Claude rejected (B6) aren't stored, so a rerun still asks about those.
+            conn = PostgresHook(postgres_conn_id="subastas_db").get_conn()
+            try:
+                stored = stored_source_urls(conn, [url for _, url in candidates])
+            finally:
+                conn.close()
+            for title, url in candidates:
+                if url in stored:
+                    print(f"Already in bronze.auctions, skipped (probably a rerun of this week): {url} | {title}")
+            new_candidates = [(title, url) for title, url in candidates if url not in stored]
+
+            # 2. BOE: raw XML of every new candidate (free, a few are discarded later)
+            downloaded = [(title, url, fetch_announcement_xml(url)) for title, url in new_candidates]
 
             # 3. Claude: keep only the real auctions.
             # The XML is returned as text because XCom stores the return value as JSON, and bytes aren't JSON
@@ -165,9 +183,10 @@ def subastas_pipeline():
                 if is_auction_title(title)
             ]
 
-            rejected = len(candidates) - len(accepted)
+            rejected = len(new_candidates) - len(accepted)
             print(
-                f"{len(candidates)} titles passed the regexes. Claude confirmed {len(accepted)} as auctions "
+                f"{len(candidates)} titles passed the regexes, {len(stored)} of them already in bronze. "
+                f"Of the {len(new_candidates)} new ones, Claude confirmed {len(accepted)} as auctions "
                 f"and rejected {rejected} (see the NOT AN AUCTION lines)"
             )
             return accepted
@@ -193,9 +212,11 @@ def subastas_pipeline():
             print(f"Inserted {inserted}, skipped {len(auctions) - inserted}")
             return inserted
 
-        auctions = parse_auctions(fetch_auctions())
-        loaded = load_auctions(auctions)
-        create_table >> loaded
+        # Passing a task's return value to another task already sets the order: fetch >> parse >> load.
+        # create_table passes no data, so its order is set by hand. 
+        accepted = fetch_auctions()
+        load_auctions(parse_auctions(accepted))
+        create_table >> accepted
 
     @task_group
     def silver():
