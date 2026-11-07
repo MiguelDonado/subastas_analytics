@@ -99,7 +99,7 @@ def _reject_announcement(cursor, boe_ref: str, reason: str, extraction_model: st
 
 def _store_auction(cursor, bronze_row: dict, announcement: Announcement, extraction_model: str) -> bool:
     """
-    Return True if the auction was stored, or False if it was rejected for having no valid lots
+    Return True if the auction was stored, or False if it has no valid lots (nothing is stored, the caller rejects it)
 
     bronze_row: Info about the auction already stored in Bronze layer (using BOE API)
     Announcement: Contains the info extracted from the auction usign Claude API
@@ -144,9 +144,6 @@ def _store_auction(cursor, bronze_row: dict, announcement: Announcement, extract
     # Auction has no valid lots: It isn't stored
     ###################
     if not valid_lots:
-        logger.warning("REJECTED %s: the auction has no valid lot (Claude found %d lots)",
-                       bronze_row["boe_ref"], len(announcement.lots))
-        _reject_announcement(cursor, bronze_row["boe_ref"], "No valid lots", extraction_model)
         return False
 
     ##########################
@@ -191,79 +188,88 @@ def load_silver(conn) -> dict:
 
     Returns the boe_refs that were loaded, the ones that were rejected and the ones that failed.
     """
-    ######################################
-    # 1. Check pending auctions from bronze to insert on silver
-    ######################################
-    # Get pending auctions from bronze to introduce in silver
+    # One cursor for the whole run.
+    # - cursor.execute(): runs the SQL against the DB right away, inside an open transaction.
+    #   Only this connection sees the changes yet (that's why RETURNING + fetchone() works)
+    # - conn.commit(): saves every change since the last commit into the DB, visible to everyone
+    # - conn.rollback(): reverts every change made by execute() since the last commit
     with conn.cursor() as cursor:
+        ######################################
+        # 1. Check pending auctions from bronze to insert on silver
+        ######################################
+        # Get pending auctions from bronze to introduce in silver
         cursor.execute(read_sql("select_pending_silver_announcements.sql"))
         # cursor.description holds metadata for each column in the result
         # Example: columns = ["boe_ref", "announcement_text", "publication_date", "source_url"]
         columns = [column.name for column in cursor.description]
         # .fetchall(): Returns each row as a tuple (with no column names)
-        # zip(): Pair each column name with its value, and dict to turn it into a dictionary
-        # Example:
-        # {
-        #     "boe_ref": "BOE-B-2026-34259",
-        #     "announcement_text": "Anuncio de...",
-        #     "publication_date": date(2026, 10, 1),
-        #     "source_url": "https://...",
-        # }
+        # zip(): Pair each column name with its value
         pending_auctions = [dict(zip(columns, row)) for row in cursor.fetchall()]
-    # Ends the transaction (psycopg2 opens one automatically, even for a SELECT)
-    conn.commit()
-    # No early return needed: with nothing pending the loop below doesn't run, so it returns
-    # empty lists, and the len() of each one in the DAG's print gives 0
-    if not pending_auctions:
-        logger.info("No pending announcements in bronze")
+        # Ends the transaction (psycopg2 opens one automatically, even for a SELECT)
+        conn.commit()
+        logger.info("%d pending announcements in bronze", len(pending_auctions))
 
-    loaded = []
-    rejected = []
-    failed = []
+        loaded = []
+        rejected = []
+        failed = []
 
-    for pending_auction in pending_auctions:
-        boe_ref = pending_auction["boe_ref"]
-        try:
-            ######################################
-            # 2. Call Claude API to extract info in a structured way
-            ######################################
-            announcement, extraction_model = extract_info_announcement(pending_auction["announcement_text"])
+        for pending_auction in pending_auctions:
+            boe_ref = pending_auction["boe_ref"]
+            try:
+                ######################################
+                # 2. Call Claude API to extract info in a structured way
+                ######################################
+                announcement, extraction_model = extract_info_announcement(pending_auction["announcement_text"])
 
-            ######################################
-            # Reject it if it has no held date
-            ######################################
-            if announcement.held_date is None:
-                logger.warning("REJECTED %s: the announcement has no held date", boe_ref)
-                with conn.cursor() as cursor:
+                ######################################
+                # Reject it if it has no held date
+                ######################################
+                if announcement.held_date is None:
+                    logger.warning("REJECTED %s: the announcement has no held date", boe_ref)
                     _reject_announcement(cursor, boe_ref, "No held date", extraction_model)
-                conn.commit()
-                rejected.append(boe_ref)
-                continue
+                    conn.commit()
+                    rejected.append(boe_ref)
+                    continue
 
-            with conn.cursor() as cursor:
-            ######################################
-            # 3. Store auction and its lots and ref catastrales 
-            ######################################
+                ######################################
+                # 3. Store auction and its lots and ref catastrales
+                ######################################
                 stored = _store_auction(cursor, pending_auction, announcement, extraction_model)
-            # One transaction per announcement: it's stored whole or not at all, and a
-            # rerun doesn't pay Claude again for the ones already stored
-            conn.commit()
-            if stored:
-                loaded.append(boe_ref)
-            else:
-                rejected.append(boe_ref)
 
-        # Case 1: API (Claude or GoolZoom) is down, so stop the run
-        except (anthropic.APIError, requests.RequestException):
-            # Discards everything since last commit (so announcement cant end up half stored). Announcements commited earlier arent affected
-            conn.rollback()
-            # Re-raises the same error -> stops load_silver -> Fails Airflow task -> Airflow then retries it later -> Announcements already commited are skipped on the retry
-            raise
-        # Case 2: Anything else, skip this announcement
-        except Exception:
-            conn.rollback()
-            # Logs the message with the full error traceback
-            logger.exception("FAILED %s: nothing stored for this announcement", boe_ref)
-            failed.append(boe_ref)
+                ######################################
+                # Reject it if it has no valid lots
+                ######################################
+                if not stored:
+                    logger.warning("REJECTED %s: the auction has no valid lot (Claude found %d lots)",
+                                   boe_ref, len(announcement.lots))
+                    _reject_announcement(cursor, boe_ref, "No valid lots", extraction_model)
+                    conn.commit()
+                    rejected.append(boe_ref)
+                    continue
+
+                ######################################
+                # Accept it: the auction and its valid lots are stored
+                ######################################
+                # One transaction per announcement: it's stored whole or not at all, and a
+                # rerun doesn't pay Claude again for the ones already stored
+                conn.commit()
+                logger.info("LOADED %s", boe_ref)
+                loaded.append(boe_ref)
+
+            # Case 1 (STOPPED): an outside service failed (Claude or Goolzoom down, rate limited or timing out),
+            # not the announcement. The rest aren't tried, because they would fail the same way
+            except (anthropic.APIError, requests.RequestException):
+                # Discards everything since last commit (so announcement cant end up half stored). Announcements commited earlier arent affected
+                conn.rollback()
+                logger.error("STOPPED at %s: the API call failed, the run stops so Airflow retries it", boe_ref)
+                # Re-raises the same error -> stops load_silver -> Fails Airflow task -> Airflow then retries it later -> Announcements already commited are skipped on the retry
+                raise
+            # Case 2 (FAILED): the announcement itself caused it (Claude refused it, its answer was cut off,
+            # a constraint failed...). Skip it and carry on with the next one, since the others aren't affected
+            except Exception:
+                conn.rollback()
+                # Logs the message with the full error traceback
+                logger.exception("FAILED %s: nothing stored for this announcement", boe_ref)
+                failed.append(boe_ref)
 
     return {"loaded": loaded, "rejected": rejected, "failed": failed}
