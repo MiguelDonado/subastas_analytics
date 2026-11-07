@@ -158,6 +158,15 @@ def subastas_pipeline():
                     "still matches the titles: look for NEAR MISS lines in this log, or search the BOE."
                 )
 
+            # B19: a single week with 0 candidates is common (about 1 in 7), and the week before had some,
+            # so it isn't an alert. Return early: there is nothing to check in bronze or send to Claude.
+            if not candidates:
+                print(
+                    f"No auction candidates in the BOE in the 7 days before {monday}. "
+                    "The week before had some, so no alert (B17 only alerts after 2 empty weeks in a row)."
+                )
+                return []
+
             # Skip the candidates already in bronze, so a rerun of this week doesn't download them
             # or pay Claude again for them. It comes after the B17 check on purpose: a rerun of a week
             # whose auctions are all stored would otherwise look like 0 candidates and alert.
@@ -198,12 +207,14 @@ def subastas_pipeline():
         # If it fails (no boe_ref, no text...), fetch_auctions already succeeded and its XCom is stored,
         # so Claude isn't called again, neither on a retry nor when the run is cleared with "Only failed".
         # retries=0: a parse error gives the same result on every attempt, so it alerts right away
+        # An empty week (B19) needs no check: an empty list parses to [] and succeeds in a moment
         @task(retries=0)
         def parse_auctions(accepted: list[dict]) -> list[dict]:
             auctions = [parse_auction(a["xml"].encode("utf-8"), a["url"]) for a in accepted]
             print(f"Parsed {len(auctions)} auctions")
             return auctions
 
+        # An empty week (B19) needs no check: the insert loop doesn't run, and the task succeeds with 0 inserted
         @task
         def load_auctions(auctions: list[dict]) -> int:
             conn = PostgresHook(postgres_conn_id="subastas_db").get_conn()
