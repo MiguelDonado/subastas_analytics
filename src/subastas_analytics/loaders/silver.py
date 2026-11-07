@@ -256,6 +256,13 @@ def load_silver(conn) -> dict:
                 logger.info("LOADED %s", boe_ref)
                 loaded.append(boe_ref)
 
+            # Case 0 (FAILED): Claude rejected this announcement's request (400 bad request, 413 too large,
+            # 422 unprocessable). They're APIErrors too, but the fault is the announcement's, not the service's,
+            # so it's skipped like Case 2. If it fell into Case 1, it would be first in line every run and block the rest
+            except (anthropic.BadRequestError, anthropic.RequestTooLargeError, anthropic.UnprocessableEntityError):
+                conn.rollback()
+                logger.exception("FAILED %s: Claude rejected the request for this announcement", boe_ref)
+                failed.append(boe_ref)
             # Case 1 (STOPPED): an outside service failed (Claude or Goolzoom down, rate limited or timing out),
             # not the announcement. The rest aren't tried, because they would fail the same way
             except (anthropic.APIError, requests.RequestException):
