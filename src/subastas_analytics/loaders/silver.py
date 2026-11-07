@@ -1,18 +1,17 @@
 """Load BOE announcements from bronze into silver.
 
 Silver only stores complete data, and everything left out is logged. Search the task log for
-"REJECTED" or "FAILED" to review the problems:
+"REJECTED", "FAILED" or "STOPPED" to review the problems:
 
 Problem                                 What happens
  Reference invalid, not found or         REJECTED: the reference isn't stored, the rest of
  with incomplete Catastro data           the announcement is
  Lot with no valid reference or with     REJECTED: the lot isn't stored, the rest of the
  no starting price                       announcement is
- No held date, no lots found or none     REJECTED: only its boe_ref and the reason are
- of them valid                           stored, so it isn't sent to Claude again
- Announcement can't be loaded            FAILED: nothing of it is stored, it is tried again
- (refused by Claude...)                  on the next run
- Claude or Goolzoom are down             The run stops, it is tried again on the next run
+ No held date, no valid lots, or the     FAILED: only its boe_ref and the reason are stored in
+ announcement can't be loaded            failed_announcements, so it isn't sent to Claude
+ (refused by Claude...)                  again. The DAG alerts
+ Claude or Goolzoom are down             STOPPED: the run stops, it is tried again on the next run
 """
 
 import logging
@@ -84,10 +83,10 @@ def _get_reference_id(cursor, raw_reference: str, boe_ref: str, lot_number: int)
     return _insert_reference(cursor, info)
 
 
-def _reject_announcement(cursor, boe_ref: str, reason: str, extraction_model: str) -> None:
-    """Record a rejected announcement, so it isn't sent to Claude again on the next run"""
+def _record_failure(cursor, boe_ref: str, reason: str, extraction_model: str | None) -> None:
+    """Record a failed announcement, so it isn't sent to Claude again on the next run"""
     cursor.execute(
-        read_sql("insert_silver_rejected_announcement.sql"),
+        read_sql("insert_silver_failed_announcement.sql"),
         {
             "boe_ref": boe_ref,
             "reason": reason,
@@ -99,7 +98,12 @@ def _reject_announcement(cursor, boe_ref: str, reason: str, extraction_model: st
 
 def _store_auction(cursor, bronze_row: dict, announcement: Announcement, extraction_model: str) -> bool:
     """
-    Return True if the auction was stored, or False if it has no valid lots (nothing is stored, the caller rejects it)
+    Store the auction, its valid lots and their catastral references. It doesn't commit.
+
+    1. Checks each lot: it needs a starting price and at least one valid reference
+       (new references are inserted here)
+    2. If at least one lot is valid, it inserts the auction and those lots, and returns True.
+       If none is valid, it inserts nothing and returns False
 
     bronze_row: Info about the auction already stored in Bronze layer (using BOE API)
     Announcement: Contains the info extracted from the auction usign Claude API
@@ -186,7 +190,8 @@ def load_silver(conn) -> dict:
     Parameters:
     - conn: Open psycopg2 connection. The caller closes it.
 
-    Returns the boe_refs that were loaded, the ones that were rejected and the ones that failed.
+    Returns the boe_refs that were loaded and the ones that failed. The failed ones are recorded in
+    silver.failed_announcements, so they aren't sent to Claude again.
     """
     # One cursor for the whole run.
     # - cursor.execute(): runs the SQL against the DB right away, inside an open transaction.
@@ -210,11 +215,13 @@ def load_silver(conn) -> dict:
         logger.info("%d pending announcements in bronze", len(pending_auctions))
 
         loaded = []
-        rejected = []
         failed = []
 
         for pending_auction in pending_auctions:
             boe_ref = pending_auction["boe_ref"]
+            # Reset on every announcement: if it fails before Claude answers, the failure is recorded with
+            # no model, instead of the one left over from the previous announcement
+            extraction_model = None
             try:
                 ######################################
                 # 2. Call Claude API to extract info in a structured way
@@ -222,13 +229,13 @@ def load_silver(conn) -> dict:
                 announcement, extraction_model = extract_info_announcement(pending_auction["announcement_text"])
 
                 ######################################
-                # Reject it if it has no held date
+                # Fail it if it has no held date
                 ######################################
                 if announcement.held_date is None:
-                    logger.warning("REJECTED %s: the announcement has no held date", boe_ref)
-                    _reject_announcement(cursor, boe_ref, "No held date", extraction_model)
+                    logger.error("FAILED %s: the announcement has no held date", boe_ref)
+                    _record_failure(cursor, boe_ref, "No held date", extraction_model)
                     conn.commit()
-                    rejected.append(boe_ref)
+                    failed.append(boe_ref)
                     continue
 
                 ######################################
@@ -237,14 +244,14 @@ def load_silver(conn) -> dict:
                 stored = _store_auction(cursor, pending_auction, announcement, extraction_model)
 
                 ######################################
-                # Reject it if it has no valid lots
+                # Fail it if it has no valid lots
                 ######################################
                 if not stored:
-                    logger.warning("REJECTED %s: the auction has no valid lot (Claude found %d lots)",
-                                   boe_ref, len(announcement.lots))
-                    _reject_announcement(cursor, boe_ref, "No valid lots", extraction_model)
+                    logger.error("FAILED %s: the auction has no valid lot (Claude found %d lots)",
+                                 boe_ref, len(announcement.lots))
+                    _record_failure(cursor, boe_ref, "No valid lots", extraction_model)
                     conn.commit()
-                    rejected.append(boe_ref)
+                    failed.append(boe_ref)
                     continue
 
                 ######################################
@@ -256,27 +263,38 @@ def load_silver(conn) -> dict:
                 logger.info("LOADED %s", boe_ref)
                 loaded.append(boe_ref)
 
-            # Case 0 (FAILED): Claude rejected this announcement's request (400 bad request, 413 too large,
-            # 422 unprocessable). They're APIErrors too, but the fault is the announcement's, not the service's,
-            # so it's skipped like Case 2. If it fell into Case 1, it would be first in line every run and block the rest
-            except (anthropic.BadRequestError, anthropic.RequestTooLargeError, anthropic.UnprocessableEntityError):
-                conn.rollback()
-                logger.exception("FAILED %s: Claude rejected the request for this announcement", boe_ref)
-                failed.append(boe_ref)
-            # Case 1 (STOPPED): an outside service failed (Claude or Goolzoom down, rate limited or timing out),
-            # not the announcement. The rest aren't tried, because they would fail the same way
-            except (anthropic.APIError, requests.RequestException):
+            # Case 1 (STOPPED): an outside service failed, not the announcement. Every announcement would fail the
+            # same way, so the rest aren't tried and nothing is recorded:
+            # - Claude down, timing out (APIConnectionError), rate limited (429), overloaded (529) or a 5xx
+            # - Claude configured wrong: bad key (401), no permission (403), retired model (404)
+            # - Goolzoom down (requests.RequestException)
+            # Claude's other errors (400 bad request, 413 too large, 422...) are the announcement's fault, so they go to Case 2.
+            # Except that out of credits is also a 400, so then every pending announcement is FAILED (see S4 in docs/6.failure_modes.md)
+            except (
+                anthropic.APIConnectionError,
+                anthropic.RateLimitError,
+                anthropic.OverloadedError,
+                anthropic.InternalServerError,
+                anthropic.AuthenticationError,
+                anthropic.PermissionDeniedError,
+                anthropic.NotFoundError,
+                requests.RequestException,
+            ):
                 # Discards everything since last commit (so announcement cant end up half stored). Announcements commited earlier arent affected
                 conn.rollback()
                 logger.error("STOPPED at %s: the API call failed, the run stops so Airflow retries it", boe_ref)
                 # Re-raises the same error -> stops load_silver -> Fails Airflow task -> Airflow then retries it later -> Announcements already commited are skipped on the retry
                 raise
-            # Case 2 (FAILED): the announcement itself caused it (Claude refused it, its answer was cut off,
-            # a constraint failed...). Skip it and carry on with the next one, since the others aren't affected
-            except Exception:
+            # Case 2 (FAILED): the announcement itself caused it (Claude rejected the request, refused it, its answer
+            # was cut off, a constraint failed...). Skip it and carry on with the next one, since the others aren't
+            # affected. It's recorded, so it isn't sent to Claude again: a retry would pay again for the same result
+            except Exception as error:
+                # Discards the half-stored announcement, then records the failure in a new transaction
                 conn.rollback()
                 # Logs the message with the full error traceback
                 logger.exception("FAILED %s: nothing stored for this announcement", boe_ref)
+                _record_failure(cursor, boe_ref, f"{type(error).__name__}: {error}", extraction_model)
+                conn.commit()
                 failed.append(boe_ref)
 
-    return {"loaded": loaded, "rejected": rejected, "failed": failed}
+    return {"loaded": loaded, "failed": failed}

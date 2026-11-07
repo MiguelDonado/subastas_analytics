@@ -51,7 +51,8 @@ Monitoring
 With two layers, there is more that can go wrong, so the pipeline relies on
 healthchecks.io and follows the logic of "no news is bad news". We receive an email, and can
 decide how to solve the problem, in two cases:
-- The pipeline fails: A task that fails on its last retry pings /fail, and the email is immediate.
+- The pipeline fails: A task that fails for good (on its last retry, or right away when it has no retries)
+  pings /fail, and the email is immediate.
 - The pipeline doesn't even execute (computer off, cron job not firing...): No ping arrives, and
   the email comes on Tuesday around 10:30 local. The check expects a ping on the same schedule as
   the cron job (Mondays at 10:30 local), plus 1 day of grace.
@@ -104,7 +105,7 @@ def _week_candidates(monday) -> list[tuple[str, str, str]]:
     "retry_delay": timedelta(minutes=2),          # first wait
     "retry_exponential_backoff": True,            # double the wait each time
     "max_retry_delay": timedelta(minutes=30),     # upper limit for any single wait,
-    "on_failure_callback": _ping_failure,         # Called only if the task fails on its last retry
+    "on_failure_callback": _ping_failure,         # Called only when the task fails for good (after its last retry, or right away with AirflowFailException)
     },
     tags=["subastas"],
     # Makes sure the DAG starts unpaused when Airflow first registers it, so it can run without you clicking anything in the UI.
@@ -240,7 +241,7 @@ def subastas_pipeline():
         )
 
         @task
-        def transform_auctions() -> dict:
+        def transform_auctions() -> None:
             """Loads every announcement in bronze that isn't in silver yet."""
             conn = PostgresHook(postgres_conn_id="subastas_db").get_conn()
             try:
@@ -248,11 +249,13 @@ def subastas_pipeline():
             finally:
                 conn.close()
 
-            print(f"Loaded {len(result['loaded'])}, rejected {len(result['rejected'])}, failed {len(result['failed'])}")
-            # Fail the task so the problem shows in the UI. A retry only repeats the failed ones.
+            print(f"Loaded {len(result['loaded'])}, failed {len(result['failed'])}")
+            # Fail the task so the problem shows in the UI and alerts you.
+            # AirflowFailException fails it without retries, so on_failure_callback pings /fail right away.
+            # A retry wouldn't help: the failed ones are already recorded in failed_announcements, so it
+            # wouldn't find them pending. It would succeed, and the alert would never be sent
             if result["failed"]:
-                raise RuntimeError(f"Announcements that failed: {result['failed']}")
-            return result
+                raise AirflowFailException(f"Announcements that failed: {result['failed']}")
 
         create_tables >> transform_auctions()
 
