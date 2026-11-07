@@ -78,17 +78,17 @@ CREATE TABLE IF NOT EXISTS silver.lots_catastral_references (
 );
 
 -- -----------------------------------------------------------------------------
--- rejected_announcements: announcements with nothing usable (no held date or no valid lots)
--- Kept here so that they aren't sent to Claude again on every run
+-- failed_announcements: every FAILED announcement (no held date, no valid lots, Claude refused, an error...)
+-- Kept here so that they aren't sent to Claude again on every run. Delete a row to retry it once the cause is fixed
 -- ------------------------------------------------------------- ----------------
-CREATE TABLE IF NOT EXISTS silver.rejected_announcements (
+CREATE TABLE IF NOT EXISTS silver.failed_announcements (
     boe_ref      VARCHAR(30)  PRIMARY KEY,
-    reason       TEXT         NOT NULL,                 -- 
-    rejected_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    extraction_model          VARCHAR(100)  NOT NULL,
+    reason       TEXT         NOT NULL,
+    failed_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    extraction_model          VARCHAR(100),
     extraction_prompt_hash    VARCHAR(12)   NOT NULL
 );
 
-COMMENT ON COLUMN silver.rejected_announcements.reason IS 'No held date or no valid lots';
-COMMENT ON COLUMN silver.rejected_announcements.extraction_model IS 'Claude model that produced the extraction this rejection is based on. It can be a fallback instead of the model requested.';
-COMMENT ON COLUMN silver.rejected_announcements.extraction_prompt_hash IS 'Hash of the extraction instructions (PROMPT_HASH in clients/llm.py). Changes when the prompt or the output schema changes.';
+COMMENT ON COLUMN silver.failed_announcements.reason IS 'Why it failed: "No held date", "No valid lots", or "<ErrorType>: <message>" for an error';
+COMMENT ON COLUMN silver.failed_announcements.extraction_model IS 'Claude model that produced the extraction this failure is based on. It can be a fallback instead of the model requested. NULL if it failed before Claude answered.';
+COMMENT ON COLUMN silver.failed_announcements.extraction_prompt_hash IS 'Hash of the extraction instructions (PROMPT_HASH in clients/llm.py). Changes when the prompt or the output schema changes.';
