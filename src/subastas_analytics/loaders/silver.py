@@ -212,6 +212,10 @@ def load_silver(conn) -> dict:
         pending_auctions = [dict(zip(columns, row)) for row in cursor.fetchall()]
     # Ends the transaction (psycopg2 opens one automatically, even for a SELECT)
     conn.commit()
+    # No early return needed: with nothing pending the loop below doesn't run, so it returns
+    # empty lists, and the len() of each one in the DAG's print gives 0
+    if not pending_auctions:
+        logger.info("No pending announcements in bronze")
 
     loaded = []
     rejected = []
