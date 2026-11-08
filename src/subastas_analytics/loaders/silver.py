@@ -239,6 +239,17 @@ def load_silver(conn) -> dict:
                     continue
 
                 ######################################
+                # Fail it if the held date is before the publication date
+                ######################################
+                if announcement.held_date < pending_auction["publication_date"]:
+                    logger.error("FAILED %s: held date %s is before publication date %s",
+                                boe_ref, announcement.held_date, pending_auction["publication_date"])
+                    _record_failure(cursor, boe_ref, "Held date before publication date", extraction_model)
+                    conn.commit()
+                    failed.append(boe_ref)
+                    continue
+
+                ######################################
                 # 3. Store auction and its lots and ref catastrales
                 ######################################
                 stored = _store_auction(cursor, pending_auction, announcement, extraction_model)
