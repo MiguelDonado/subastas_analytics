@@ -21,6 +21,7 @@ import anthropic
 import requests
 
 from ..clients.goolzoom import CatastroInfo, lookup_reference, normalize_reference
+from ..clients.healthchecks import ping_failure
 from ..clients.llm import PROMPT_HASH, Announcement, extract_info_announcement
 from .common import read_sql
 
@@ -294,6 +295,11 @@ def load_silver(conn) -> dict:
                 # Discards everything since last commit (so announcement cant end up half stored). Announcements commited earlier arent affected
                 conn.rollback()
                 logger.error("STOPPED at %s: the API call failed, the run stops so Airflow retries it", boe_ref)
+                # The failed list is lost when this attempt ends, and the retry won't see these announcements as pending,
+                # so this is the only chance to alert about them (S33 in docs/6.failure_modes.md)
+                if failed:
+                    logger.error("Announcements that failed before the run stopped: %s", failed)
+                    ping_failure()
                 # Re-raises the same error -> stops load_silver -> Fails Airflow task -> Airflow then retries it later -> Announcements already commited are skipped on the retry
                 raise
             # Case 2 (FAILED): the announcement itself caused it (Claude rejected the request, refused it, its answer
