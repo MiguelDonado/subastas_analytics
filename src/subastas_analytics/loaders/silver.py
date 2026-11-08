@@ -6,8 +6,8 @@ Silver only stores complete data, and everything left out is logged. Search the 
 Problem                                 What happens
  Reference invalid, not found or         REJECTED: the reference isn't stored, the rest of
  with incomplete Catastro data           the announcement is
- Lot with no valid reference or with     REJECTED: the lot isn't stored, the rest of the
- no starting price                       announcement is
+ Lot with no references, with any        REJECTED: the lot isn't stored, the rest of the
+ invalid one, or with no starting price  announcement is
  No held date, no valid lots, or the     FAILED: only its boe_ref and the reason are stored in
  announcement can't be loaded            failed_announcements, so it isn't sent to Claude
  (refused by Claude...)                  again. The DAG alerts
@@ -101,7 +101,7 @@ def _store_auction(cursor, bronze_row: dict, announcement: Announcement, extract
     """
     Store the auction, its valid lots and their catastral references. It doesn't commit.
 
-    1. Checks each lot: it needs a starting price and at least one valid reference
+    1. Checks each lot: it needs a starting price and at least one reference, all of them valid
        (new references are inserted here)
     2. If at least one lot is valid, it inserts the auction and those lots, and returns True.
        If none is valid, it inserts nothing and returns False
@@ -128,22 +128,23 @@ def _store_auction(cursor, bronze_row: dict, announcement: Announcement, extract
         # reference_ids: Holds a list with the ids of all the ref catastral in the lot.
         #                For problematic ref catastral we get None values
         ##########################
+        # Checkpoint: if this lot is rejected, its references can be undone without losing the earlier lots
+        cursor.execute("SAVEPOINT lot")
         reference_ids = [
             _get_reference_id(cursor, raw_reference, bronze_row["boe_ref"], lot.lot_number)
             for raw_reference in lot.catastral_references
         ]
-        # List with the id of all valid catastral references
-        valid_reference_ids = [reference_id for reference_id in reference_ids if reference_id is not None]
 
         ###################
-        # Lote has no valid catastral references: It isn't stored
+        # Lot with no references, or with any invalid one: It isn't stored, because its surface would be wrong
         ###################
-        if not valid_reference_ids:
-            logger.warning("REJECTED %s lot %s: the lot has no valid catastral reference",
+        if not reference_ids or None in reference_ids:
+            cursor.execute("ROLLBACK TO SAVEPOINT lot")
+            logger.warning("REJECTED %s lot %s: the lot has no catastral references, or some are invalid",
                            bronze_row["boe_ref"], lot.lot_number)
             continue
 
-        valid_lots.append((lot, valid_reference_ids))
+        valid_lots.append((lot, reference_ids))
 
     ###################
     # Auction has no valid lots: It isn't stored
@@ -162,7 +163,7 @@ def _store_auction(cursor, bronze_row: dict, announcement: Announcement, extract
     })
     auction_id = cursor.fetchone()[0]
 
-    for lot, valid_reference_ids in valid_lots:
+    for lot, reference_ids in valid_lots:
         ##########################
         # 3. Insert lot in silver.lots
         ##########################
@@ -176,7 +177,7 @@ def _store_auction(cursor, bronze_row: dict, announcement: Announcement, extract
         ###################
         # 4. Insert rows into junction table
         ###################
-        for reference_id in valid_reference_ids:
+        for reference_id in reference_ids:
             cursor.execute(
                 read_sql("insert_silver_lot_catastral_reference.sql"),
                 {"lot_id": lot_id, "reference_id": reference_id},
