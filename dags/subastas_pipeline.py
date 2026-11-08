@@ -100,6 +100,8 @@ def _week_candidates(monday) -> list[tuple[str, str, str]]:
     start_date=datetime(2026, 10, 25),
     # Creates a run for every scheduled time since start_date that hasn't run yet
     catchup=True,
+    # One run at a time: two runs in silver would select the same pending announcements and pay Claude twice (S15)
+    max_active_runs=1,
     default_args={
     "retries": 3,
     "retry_delay": timedelta(minutes=2),          # first wait
