@@ -73,17 +73,18 @@ from subastas_analytics.clients.boe import (
     fetch_auction_candidates,
     parse_auction,
 )
+from subastas_analytics.clients.healthchecks import ping_failure
 from subastas_analytics.clients.llm import is_auction_title
 from subastas_analytics.config import SQL_DIR
 from subastas_analytics.loaders.bronze import insert_auctions, stored_boe_refs
 from subastas_analytics.loaders.silver import load_silver
 
 
-def _ping_failure(context):
+def _on_task_ping_failure(context):
     """
     Alerts you right away. It also stops a failed catchup run from being hidden when another run succeeds in the same window.
     """
-    requests.get(f"{os.environ['HEALTHCHECK_URL']}/fail", timeout = 10)
+    ping_failure()
 
 
 def _week_candidates(monday) -> list[tuple[str, str, str]]:
@@ -107,7 +108,7 @@ def _week_candidates(monday) -> list[tuple[str, str, str]]:
     "retry_delay": timedelta(minutes=2),          # first wait
     "retry_exponential_backoff": True,            # double the wait each time
     "max_retry_delay": timedelta(minutes=30),     # upper limit for any single wait,
-    "on_failure_callback": _ping_failure,         # Called only when the task fails for good (after its last retry, or right away with AirflowFailException)
+    "on_failure_callback": _on_task_ping_failure,        # Called only when the task fails for good (after its last retry, or right away with AirflowFailException)
     },
     tags=["subastas"],
     # Makes sure the DAG starts unpaused when Airflow first registers it, so it can run without you clicking anything in the UI.
