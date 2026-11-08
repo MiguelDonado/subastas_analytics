@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS silver.auctions (
 );
 
 COMMENT ON COLUMN silver.auctions.extraction_model IS 'Claude model that produced this extraction. It can be a fallback instead of the model requested.';
-COMMENT ON COLUMN silver.auctions.extraction_prompt_hash IS 'Hash of the extraction instructions (PROMPT_HASH in clients/llm.py). Changes when the prompt or the output schema changes.';
+COMMENT ON COLUMN silver.auctions.extraction_prompt_hash IS 'Hash of the extraction instructions (PROMPT_HASH in clients/llm.py). Changes when the prompt, the output schema or the effort changes.';
 
 -- -----------------------------------------------------------------------------
 -- lots: one row per lot of an announcement
@@ -91,4 +91,4 @@ CREATE TABLE IF NOT EXISTS silver.failed_announcements (
 
 COMMENT ON COLUMN silver.failed_announcements.reason IS 'Why it failed: "No held date", "No valid lots", or "<ErrorType>: <message>" for an error';
 COMMENT ON COLUMN silver.failed_announcements.extraction_model IS 'Claude model that produced the extraction this failure is based on. It can be a fallback instead of the model requested. NULL if it failed before Claude answered.';
-COMMENT ON COLUMN silver.failed_announcements.extraction_prompt_hash IS 'Hash of the extraction instructions (PROMPT_HASH in clients/llm.py). Changes when the prompt or the output schema changes.';
+COMMENT ON COLUMN silver.failed_announcements.extraction_prompt_hash IS 'Hash of the extraction instructions (PROMPT_HASH in clients/llm.py). Changes when the prompt, the output schema or the effort changes.';

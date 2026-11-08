@@ -85,10 +85,12 @@ class Announcement(BaseModel):
     lots: list[Lot]
 
 
+EXTRACTION_EFFORT = "low"
+
 # Short fingerprint of the extraction instructions. It changes by itself whenever
-# SYSTEM_PROMPT or the Announcement schema changes.
+# SYSTEM_PROMPT, the Announcement schema or EXTRACTION_EFFORT changes.
 PROMPT_HASH = hashlib.sha256(
-    (SYSTEM_PROMPT + json.dumps(Announcement.model_json_schema(), sort_keys=True)).encode()
+    (SYSTEM_PROMPT + json.dumps(Announcement.model_json_schema(), sort_keys=True) + EXTRACTION_EFFORT).encode()
 ).hexdigest()[:12]
 
 
@@ -131,7 +133,7 @@ def extract_info_announcement(text: str) -> tuple[Announcement, str]:
         # The API uses structured outputs, the model's output is constrained to that schema
         output_format=Announcement,
         # This task does not require a lot of thinking
-        output_config={"effort": "low"},
+        output_config={"effort": EXTRACTION_EFFORT},
         # Recent models like Opus 5.5 run safety classifiers on each request, with categories such as cyber,
         # bio and reasoning_extraction
         # Beta: Is how Anthropic releases features that work but aren't final yet.
