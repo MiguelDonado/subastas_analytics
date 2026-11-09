@@ -1,21 +1,10 @@
 Capas for shiny application: Hidrografia, 3D (Google Maps), Catastro transparente, IGN
 rotate api key goolzoom, because i paste it unintentionaly in plain text in claude session
 
-
-
-
-
-
-- I guess once I make sure all the edge cases are handled, then i can just lower from 7 days, and add a bit of redundancy, and that would not be a problem cuz i already handled that redundant things dont cause problems in the edge cases.
-- **Failed days:** one bad day fails the whole week's run, and a retry repeats all 7 days.
-
-- I think it should look not only 7 days before in the dag timedelta, but 14 days before for redundancy, because dag runs once per week, and imaging one week doesnt run, if only looks 7 days behind i would lose data.
-
 workflow diagram
 
 quality checks
 
-logs very well
 
 
 # Improvements

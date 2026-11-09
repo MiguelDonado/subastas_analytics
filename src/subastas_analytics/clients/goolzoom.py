@@ -99,7 +99,6 @@ def lookup_reference(raw_reference: str) -> CatastroInfo | None:
         "province": plot["Province"],
         "use": property["Main use"],
         "class": property["Class"],
-        "surface": plot["Area of the property"],
         "centroid": plot["Centroid"],
     }
     # Case 3: Reference exists but some field is empty
@@ -107,7 +106,12 @@ def lookup_reference(raw_reference: str) -> CatastroInfo | None:
     if missing:
         logger.warning("Reference %s has no value for %s", reference, ", ".join(missing))
         return None
-    
+
+    # Case 4: Empty surface. Every property should have one, so it's a surprise: fail the announcement and alert (S34)
+    # A missing key is covered too: it raises KeyError: 'Area of the property', which is already a clear error
+    if not plot["Area of the property"]:
+        raise ValueError(f"Reference {reference} has no surface")
+
     latitude, longitude = plot["Centroid"].split()
     return CatastroInfo(
         reference=reference,
