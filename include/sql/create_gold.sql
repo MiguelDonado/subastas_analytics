@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS gold.dim_auctions (
     auction_id         BIGINT       PRIMARY KEY,                     -- same id as silver.auctions
     boe_ref            VARCHAR(30)  NOT NULL UNIQUE,
     announcement_text  TEXT         NOT NULL,
-    source_url         TEXT         NOT NULL UNIQUE
+    source_url         TEXT         NOT NULL UNIQUE CHECK (source_url LIKE '%/xml.php%')
 );
 
 -- -----------------------------------------------------------------------------
@@ -131,5 +131,7 @@ JOIN lot_attributes attributes USING (lot_id)
 JOIN lot_history history USING (lot_id)
 JOIN gold.dim_date publication ON publication.date_id = f.publication_date_id
 LEFT JOIN gold.dim_date held ON held.date_id = f.held_date_id;
+
+COMMENT ON COLUMN gold.app_lots.announcement_url IS 'Readable page of the announcement, built from source_url. source_url must contain /xml.php, otherwise it indicates a change of format in the BOE links.';
 
 COMMENT ON COLUMN gold.app_lots.qualification IS 'Most common qualification among the references of the lot, ignoring NULLs (the first alphabetically if there is a tie). It does not consider surface. NULL if none of the references has a qualification.';
