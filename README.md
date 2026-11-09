@@ -5,7 +5,7 @@
 
 ## Tech stack
 Airflow
-Cron jobs
+Systemd timers
 Job Monitoring (Healtchecks.io)
 UV
 APIs and SDK

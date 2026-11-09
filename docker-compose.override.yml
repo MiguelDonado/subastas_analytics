@@ -14,9 +14,8 @@ services:
     # only be read by the same major version, so a silent upgrade would break it.
     image: postgres:17
 
-    # Start this container again whenever the Docker daemon starts (e.g. after
-    # a reboot), unless it was stopped on purpose with `astro dev stop`.
-    restart: unless-stopped
+    # Don't start it again on boot, same as the Airflow containers below.
+    restart: "no"
 
     # POSTGRES_USER, POSTGRES_PASSWORD and POSTGRES_DB, read by the image to
     # create the superuser and the database. Kept in subastas-db.env, out of git
@@ -43,6 +42,25 @@ services:
     # containers. Containers can only reach each other by name on the same network.
     networks:
       - airflow
+
+  # These containers should only run during the weekly window. Astro sets them to
+  # `unless-stopped`, so after a power cut they would start on boot and stay up
+  # until the next `astro dev stop`.
+  # There is a trade-off: with `unless-stopped`, a run cut off by a power cut would
+  # carry on by itself on boot. We still prefer "no", so the containers don't stay
+  # running in the background during the whole week without us knowing. The cut-off
+  # run stays paused until Airflow next starts, and healthchecks.io alerts us because
+  # the success ping never arrives.
+  postgres:
+    restart: "no"
+  scheduler:
+    restart: "no"
+  dag-processor:
+    restart: "no"
+  api-server:
+    restart: "no"
+  triggerer:
+    restart: "no"
 
 # Declares the named volume used above. Without this, Compose fails with
 # `service "cgm-db" refers to undefined volume subastas_db_data`.

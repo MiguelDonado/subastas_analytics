@@ -1,0 +1,40 @@
+[Unit]
+Description=Run Airflow for 2 hours so the weekly DAG can run
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+# What to run and how. In order: start Airflow, wait 2 hours while the DAG runs, stop Airflow.
+# This service only starts the containers, it doesn't trigger the DAG. If Airflow has no pending
+# run (scheduled or catch-up), no tasks run: the containers just sit idle for the 2 hours and stop.
+[Service]
+# The commands run one after another, and the service is finished when the last one ends.
+# It also allows more than one ExecStart, which normal services don't.
+Type=oneshot
+
+# Run the commands as miguel, not as root (the default for system services).
+# Astro then finds its config in the home folder, and this user already has access to Docker.
+User=miguel
+
+# The folder to run the commands from, like doing cd first.
+# astro dev start has to run inside the project folder.
+WorkingDirectory=/home/miguel/6.Projects/subastas_analytics
+
+# Wait 2 minutes first, so a catch-up run at boot doesn't compete with everything else
+# starting on the laptop. It also moves the normal Monday start to 10:32, which doesn't matter.
+ExecStartPre=/usr/bin/sleep 120
+
+# Start Airflow. --no-browser stops it from trying to open the UI, since nobody is watching.
+ExecStart=/usr/local/bin/astro dev start --no-browser
+
+# Wait 2 hours (7200 seconds) to give the DAG time to finish.
+# It only runs if astro dev start worked.
+ExecStart=/usr/bin/sleep 7200
+
+# Stop Airflow and free the RAM. It always runs when the service ends, even if an
+# earlier step failed or the laptop is shutting down normally.
+# After an unexpected shutdown (e.g. a power cut) it can't run, but the containers don't
+# start again on boot, so they don't take up resources for a whole week. The downside is
+# that the DAG run doesn't finish by itself: it stays paused until Airflow next starts,
+# and an alert is sent. See the restart: "no" comment in ../docker-compose.override.yml.
+ExecStopPost=/usr/local/bin/astro dev stop

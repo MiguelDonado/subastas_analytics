@@ -260,7 +260,7 @@ def load_silver(conn) -> dict:
                 # Fail it if it has no valid lots
                 ######################################
                 if not stored:
-                    logger.error("FAILED %s: the auction has no valid lot (Claude found %d lots)",
+                    logger.error("FAILED %s: no valid lots (Claude found %d)",
                                  boe_ref, len(announcement.lots))
                     _record_failure(cursor, boe_ref, "No valid lots", extraction_model)
                     conn.commit()

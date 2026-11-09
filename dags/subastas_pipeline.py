@@ -23,15 +23,15 @@ Scheduling
 ================================================================================
 Unlike cgm-analytics, which runs hourly, this pipeline only runs once per week.
 To avoid having the Airflow containers of this project taking up memory all the time,
-an external cron job starts them (astro dev start) and stops them (astro dev stop).
-The cron job only activates the containers when they are needed: it starts them on Monday
+an external systemd timer starts them (astro dev start) and stops them (astro dev stop).
+The timer only activates the containers when they are needed: it starts them on Monday
 morning and stops them 2 hours later. It doesn't trigger the DAG itself.
-So scheduling has two layers: the cron jobs and Airflow.
+So scheduling has two layers: the systemd timer and Airflow.
 
-The DAG is scheduled at Monday 00:00 UTC on purpose, so that it always comes before the cron job.
+The DAG is scheduled at Monday 00:00 UTC on purpose, so that it always comes before the timer.
 When the containers start, Airflow sees the run it missed and starts it right away (catchup=True).
-This is safer than scheduling it inside the cron window: cron runs on local time and Airflow on
-UTC, so the two would have to be kept in sync. This way, changing the time of the cron job
+This is safer than scheduling it inside the timer's window: the timer runs on local time and Airflow
+on UTC, so the two would have to be kept in sync. This way, changing the time of the timer
 or the clocks changing doesn't require any change in the DAG.
 
 - start_date: The earliest date Airflow can schedule a run, so it never creates one before it.
@@ -53,9 +53,9 @@ healthchecks.io and follows the logic of "no news is bad news". We receive an em
 decide how to solve the problem, in two cases:
 - The pipeline fails: A task that fails for good (on its last retry, or right away when it has no retries)
   pings /fail, and the email is immediate.
-- The pipeline doesn't even execute (computer off, cron job not firing...): No ping arrives, and
+- The pipeline doesn't even execute (computer off, timer not firing...): No ping arrives, and
   the email comes on Tuesday around 10:30 local. The check expects a ping on the same schedule as
-  the cron job (Mondays at 10:30 local), plus 1 day of grace.
+  the timer (Mondays at 10:30 local), plus 1 day of grace.
 """
 
 import os
@@ -98,7 +98,7 @@ def _week_candidates(monday) -> list[tuple[str, str, str]]:
 @dag(
     schedule="0 0 * * 1",   # Mondays at 00:00 UTC
     # Earliest date the DAG can have a scheduled run. Airflow doesnt schedule anything before it
-    start_date=datetime(2026, 10, 25),
+    start_date=datetime(2026, 9, 1),
     # Creates a run for every scheduled time since start_date that hasn't run yet
     catchup=True,
     # One run at a time: two runs in silver would select the same pending announcements and pay Claude twice (S15)
