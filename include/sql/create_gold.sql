@@ -34,8 +34,8 @@ CREATE TABLE IF NOT EXISTS gold.dim_auctions (
 CREATE TABLE IF NOT EXISTS gold.dim_catastral_references (
     catastral_reference_id  BIGINT            PRIMARY KEY,           -- same id as silver.catastral_references
     catastral_reference     VARCHAR(20)       NOT NULL UNIQUE CHECK (char_length(catastral_reference) = 20),  -- no spaces, uppercase; references of any other length are not stored
-    latitude                DOUBLE PRECISION  NOT NULL,
-    longitude               DOUBLE PRECISION  NOT NULL,
+    latitude                DOUBLE PRECISION  NOT NULL CHECK (latitude BETWEEN 27 AND 44),     -- Spain, including the Canary and Balearic Islands
+    longitude               DOUBLE PRECISION  NOT NULL CHECK (longitude BETWEEN -19 AND 5),    -- both checks also catch latitude and longitude being swapped, or Goolzoom changing the format of its coordinates
     use                     VARCHAR(100)      NOT NULL,
     class                   VARCHAR(100)      NOT NULL,
     surface                 NUMERIC(12, 2)    NOT NULL CHECK (surface > 0),
