@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS gold.dim_catastral_references (
     longitude               DOUBLE PRECISION  NOT NULL,
     use                     VARCHAR(100)      NOT NULL,
     class                   VARCHAR(100)      NOT NULL,
-    surface                 NUMERIC(12, 2)    NOT NULL,
+    surface                 NUMERIC(12, 2)    NOT NULL CHECK (surface > 0),
     qualification           VARCHAR(100),                            -- qualification of the biggest crop; NULL if it has no crops
     municipio               VARCHAR(100)      NOT NULL,
     province                VARCHAR(100)      NOT NULL
