@@ -32,7 +32,7 @@ COMMENT ON COLUMN silver.auctions.extraction_prompt_hash IS 'Hash of the extract
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS silver.lots (
     lot_id            BIGINT          GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    starting_price    NUMERIC(14, 2)  NOT NULL CHECK (starting_price >= 0),  -- earliest round offered in the announcement
+    starting_price    NUMERIC(14, 2)  NOT NULL CHECK (starting_price > 0),  -- earliest round offered in the announcement
     auction_id        BIGINT          NOT NULL REFERENCES silver.auctions (auction_id) ON DELETE CASCADE,
     lot_number        INTEGER         NOT NULL,
     UNIQUE (auction_id, lot_number)

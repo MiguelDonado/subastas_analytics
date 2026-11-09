@@ -52,7 +52,7 @@ COMMENT ON COLUMN gold.dim_catastral_references.qualification IS 'Catastro quali
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS gold.fact_lots (
     lot_id               BIGINT          PRIMARY KEY,                -- same id as silver.lots
-    starting_price       NUMERIC(14, 2)  NOT NULL CHECK (starting_price >= 0),  -- earliest round offered in the announcement                  
+    starting_price       NUMERIC(14, 2)  NOT NULL CHECK (starting_price > 0),  -- earliest round offered in the announcement                  
     total_surface        NUMERIC(14, 2)  NOT NULL,                   -- sum of the surfaces of its references
     reference_count      INTEGER         NOT NULL,
     auction_id           BIGINT          NOT NULL REFERENCES gold.dim_auctions (auction_id),
