@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS silver.catastral_references (
     use                     VARCHAR(100)      NOT NULL,
     class                   VARCHAR(100)      NOT NULL,
     surface                 NUMERIC(12, 2)    NOT NULL CHECK (surface > 0),
-    qualification           VARCHAR(100),                            -- qualification of the biggest crop; NULL if it has no crops
+    qualification           VARCHAR(100),                            -- qualification of the biggest crop; NULL if it has no crops (for example in the case of an apartment)
     municipio_id            BIGINT            NOT NULL REFERENCES silver.municipios (municipio_id)
 );
 
