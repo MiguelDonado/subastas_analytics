@@ -83,6 +83,8 @@ CREATE TABLE IF NOT EXISTS silver.lots_catastral_references (
 -- ------------------------------------------------------------- ----------------
 CREATE TABLE IF NOT EXISTS silver.failed_announcements (
     boe_ref      VARCHAR(30)  PRIMARY KEY,
+    publication_date  DATE    NOT NULL,                          
+    source_url   TEXT         NOT NULL,                          
     reason       TEXT         NOT NULL,
     failed_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
     extraction_model          VARCHAR(100),

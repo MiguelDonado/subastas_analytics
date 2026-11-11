@@ -1,2 +1,2 @@
-INSERT INTO silver.failed_announcements (boe_ref, reason, extraction_model, extraction_prompt_hash)
-VALUES (%(boe_ref)s, %(reason)s, %(extraction_model)s, %(extraction_prompt_hash)s);
+INSERT INTO silver.failed_announcements (boe_ref, publication_date, source_url, reason, extraction_model, extraction_prompt_hash)
+VALUES (%(boe_ref)s, %(publication_date)s, %(source_url)s, %(reason)s, %(extraction_model)s, %(extraction_prompt_hash)s);
