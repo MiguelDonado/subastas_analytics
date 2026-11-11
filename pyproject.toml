@@ -34,6 +34,8 @@ dev = [
 testpaths = ["tests/unit", "tests/integration"]
 # A typo in a marker name is an error, instead of a mark that silently does nothing
 addopts = ["--strict-markers"]
+# Folders added to the places Python imports from, so tests/dags can `import subastas_pipeline`
+pythonpath = ["dags"]
 # Every marker has to be declared here, because of --strict-markers
 markers = [
     "integration: needs Docker, it starts a Postgres container. Skip them with -m 'not integration'",
