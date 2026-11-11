@@ -14,5 +14,19 @@ wheels/
 .env.bak
 subastas-db.env
 
-# logs
+# Astro / Airflow
+.astro/*
+!.astro/config.yaml
+!.astro/test_dag_integrity_default.py
+!.astro/dag_integrity_exceptions.txt
+airflow_settings.yaml
+airflow.cfg
+airflow.db
 logs/
+.Rproj.user
+.Renviron
+
+# Assets
+*.kdenlive
+*.mp4
+*.mkv
