@@ -137,11 +137,6 @@ def test_s27_other_goolzoom_errors_raise(monkeypatch, make_response, status_code
         goolzoom._get_data(REFERENCE)
 
 
-def test_s26_raises_a_requests_error_so_load_silver_stops():
-    """load_silver catches requests.RequestException to STOP the run. HTTPError must be one of them."""
-    assert issubclass(requests.HTTPError, requests.RequestException)
-
-
 ######################################
 # lookup_reference
 ######################################

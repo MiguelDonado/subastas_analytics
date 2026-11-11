@@ -24,11 +24,17 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "psycopg2-binary>=2.9.13",
     "pytest>=9.2.0",
+    "testcontainers[postgres]>=4.15.0",
 ]
 
 [tool.pytest.ini_options]
 # What a plain `pytest` runs. tests/dags needs Airflow, so it only runs in the container (astro dev pytest)
-testpaths = ["tests/unit"]
+testpaths = ["tests/unit", "tests/integration"]
 # A typo in a marker name is an error, instead of a mark that silently does nothing
 addopts = ["--strict-markers"]
+# Every marker has to be declared here, because of --strict-markers
+markers = [
+    "integration: needs Docker, it starts a Postgres container. Skip them with -m 'not integration'",
+]
