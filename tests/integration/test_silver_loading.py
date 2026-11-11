@@ -119,10 +119,14 @@ def test_failed_announcement_is_recorded_and_the_next_one_still_loads(conn, add_
 
     assert load_silver(conn) == {"loaded": ["BOE-B-2"], "failed": ["BOE-B-1"]}
 
-    [(boe_ref, stored_reason, stored_model, prompt_hash)] = rows(conn, """
-        SELECT boe_ref, reason, extraction_model, extraction_prompt_hash FROM silver.failed_announcements
+    [(boe_ref, publication_date, source_url, stored_reason, stored_model, prompt_hash)] = rows(conn, """
+        SELECT boe_ref, publication_date, source_url, reason, extraction_model, extraction_prompt_hash
+        FROM silver.failed_announcements
     """)
     assert boe_ref == "BOE-B-1"
+    # Copied from bronze, so it can be found by date and opened without joining bronze
+    assert publication_date == PUBLICATION_DATE
+    assert source_url == "https://www.boe.es/diario_boe/xml.php?id=BOE-B-1"
     assert stored_reason.startswith(reason)
     # The model is only known when Claude answered
     assert stored_model == model

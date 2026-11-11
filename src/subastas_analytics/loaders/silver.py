@@ -84,12 +84,18 @@ def _get_reference_id(cursor, raw_reference: str, boe_ref: str, lot_number: int)
     return _insert_reference(cursor, info)
 
 
-def _record_failure(cursor, boe_ref: str, reason: str, extraction_model: str | None) -> None:
-    """Record a failed announcement, so it isn't sent to Claude again on the next run"""
+def _record_failure(cursor, bronze_row: dict, reason: str, extraction_model: str | None) -> None:
+    """Record a failed announcement, so it isn't sent to Claude again on the next run
+
+    bronze_row: The announcement as it's stored in bronze. Its publication date and URL are copied,
+                so a failed announcement can be found and opened without joining bronze
+    """
     cursor.execute(
         read_sql("insert_silver_failed_announcement.sql"),
         {
-            "boe_ref": boe_ref,
+            "boe_ref": bronze_row["boe_ref"],
+            "publication_date": bronze_row["publication_date"],
+            "source_url": bronze_row["source_url"],
             "reason": reason,
             "extraction_model": extraction_model,
             "extraction_prompt_hash": PROMPT_HASH,
@@ -235,7 +241,7 @@ def load_silver(conn) -> dict:
                 ######################################
                 if announcement.held_date is None:
                     logger.error("FAILED %s: the announcement has no held date", boe_ref)
-                    _record_failure(cursor, boe_ref, "No held date", extraction_model)
+                    _record_failure(cursor, pending_auction, "No held date", extraction_model)
                     conn.commit()
                     failed.append(boe_ref)
                     continue
@@ -246,7 +252,7 @@ def load_silver(conn) -> dict:
                 if announcement.held_date < pending_auction["publication_date"]:
                     logger.error("FAILED %s: held date %s is before publication date %s",
                                 boe_ref, announcement.held_date, pending_auction["publication_date"])
-                    _record_failure(cursor, boe_ref, "Held date before publication date", extraction_model)
+                    _record_failure(cursor, pending_auction, "Held date before publication date", extraction_model)
                     conn.commit()
                     failed.append(boe_ref)
                     continue
@@ -262,7 +268,7 @@ def load_silver(conn) -> dict:
                 if not stored:
                     logger.error("FAILED %s: no valid lots (Claude found %d)",
                                  boe_ref, len(announcement.lots))
-                    _record_failure(cursor, boe_ref, "No valid lots", extraction_model)
+                    _record_failure(cursor, pending_auction, "No valid lots", extraction_model)
                     conn.commit()
                     failed.append(boe_ref)
                     continue
@@ -311,7 +317,7 @@ def load_silver(conn) -> dict:
                 conn.rollback()
                 # Logs the message with the full error traceback
                 logger.exception("FAILED %s: nothing stored for this announcement", boe_ref)
-                _record_failure(cursor, boe_ref, f"{type(error).__name__}: {error}", extraction_model)
+                _record_failure(cursor, pending_auction, f"{type(error).__name__}: {error}", extraction_model)
                 conn.commit()
                 failed.append(boe_ref)
 
