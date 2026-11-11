@@ -23,6 +23,11 @@ Data Modeling
     
 
 
+## Built with Claude
+
+- **Tests (`tests/`):** written with Claude. Only the unit tests (`tests/unit`) were reviewed.
+- **Failure modes (`docs/6.failure_modes.md`):** built with the help of Claude, then carefully and comprehensively reviewed and modified.
+
 ## Ports
 
 Set in `.astro/config.yaml`, because `cgm-analytics` already uses 8080, 5432 and 5433:

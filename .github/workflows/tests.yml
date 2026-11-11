@@ -1,0 +1,38 @@
+# Runs the tests on every pull request to main, and on every push to main.
+# A pull request can only be merged if both jobs pass, once the ruleset 
+# requires them (docs/5.ci_cd.md)
+name: tests
+
+on:
+    pull_request:
+        branches: [main]
+    push:
+        branches: [main]
+
+jobs:
+    unit-and-integration:
+        # Github Ubuntu machines come with Docker, so testcontainers can strat Postgres here too
+        runs-on: ubuntu-latest
+        steps:
+            # Copy our repo into the runner (fresh venv)
+            - uses: actions/checkout@v4
+
+            # Installs uv. `uv sync` then installs Python 3.12 (from .python-version) and the dev dependencies
+            - uses: astral-sh/setup-uv@v6
+            - run: uv sync
+
+            - run: uv run pytest
+    dags:
+        # Separate job: it needs the Astro CLI and builds the Airflow image
+        runs-on: ubuntu-latest
+        steps:
+        - uses: actions/checkout@v4
+
+        - name: Install the Astro CLI
+            run: curl -sSL install.astronomer.io | sudo bash -s
+        
+        # .env is out of git (it has the API keys). The DAG tests don't need any of it, since every
+        # API is faked, but astro dev pytest looks for the file
+        - run: touch .env
+
+        - run: astro dev pytest tests/dags
