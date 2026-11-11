@@ -24,12 +24,17 @@ TABLES = [
     "silver.catastral_references",
     "silver.lots_catastral_references",
     "silver.failed_announcements",
+    "gold.dim_date",
+    "gold.dim_auctions",
+    "gold.dim_catastral_references",
+    "gold.fact_lots",
+    "gold.lots_catastral_references_bridge",
 ]
 
 
 @pytest.fixture(scope="session")
 def postgres() -> Iterator[dict]:
-    """Start one Postgres 17 container for the whole test session, with the bronze and silver tables.
+    """Start one Postgres 17 container for the whole test session, with the bronze, silver and gold tables.
 
     scope="session": it runs once, before the first test that asks for it, and the container is
     deleted after the last test. Starting one per test would take seconds each.
@@ -51,6 +56,7 @@ def postgres() -> Iterator[dict]:
         cursor = connection.cursor()
         cursor.execute((SQL_DIR / "create_bronze_auctions.sql").read_text())
         cursor.execute((SQL_DIR / "create_silver.sql").read_text())
+        cursor.execute((SQL_DIR / "create_gold.sql").read_text())
         connection.commit()
         connection.close()
         yield connection_details
