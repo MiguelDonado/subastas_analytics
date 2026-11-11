@@ -126,6 +126,16 @@ def _store_auction(cursor, bronze_row: dict, announcement: Announcement, extract
                            bronze_row["boe_ref"], lot.lot_number)
             continue
 
+        ###################
+        # Lot has no catastral references: It isn't stored, because its surface would be unknown.
+        # The announcement may identify the property another way (coordinates, address...), see S36
+        ###################
+        if not lot.catastral_references:
+            logger.warning("REJECTED %s lot %s: the lot has no catastral references "
+                           "(the announcement may identify the property another way, see S36)",
+                           bronze_row["boe_ref"], lot.lot_number)
+            continue
+
         ##########################
         # 1. Retrive id of catastral references of each lot, before inserting the lots
         #    1. Already stored
@@ -142,11 +152,12 @@ def _store_auction(cursor, bronze_row: dict, announcement: Announcement, extract
         ]
 
         ###################
-        # Lot with no references, or with any invalid one: It isn't stored, because its surface would be wrong
+        # Lot with any invalid reference: It isn't stored, because its surface would be wrong.
+        # The REJECTED line of each invalid reference, logged above, says which one
         ###################
-        if not reference_ids or None in reference_ids:
+        if None in reference_ids:
             cursor.execute("ROLLBACK TO SAVEPOINT lot")
-            logger.warning("REJECTED %s lot %s: the lot has no catastral references, or some are invalid",
+            logger.warning("REJECTED %s lot %s: some of its catastral references are invalid",
                            bronze_row["boe_ref"], lot.lot_number)
             continue
 

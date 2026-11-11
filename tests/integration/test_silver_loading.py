@@ -204,7 +204,9 @@ def test_s17_lot_without_references_is_rejected(conn, add_bronze, claude, caplog
     load_silver(conn)
 
     assert stored_links(conn) == [(2, REF_A)]
-    assert "REJECTED BOE-B-1 lot 1" in caplog.text
+    # Points to S36: the announcement may identify the property another way
+    assert "REJECTED BOE-B-1 lot 1: the lot has no catastral references" in caplog.text
+    assert "S36" in caplog.text
 
 
 def test_s18_lot_with_an_invalid_reference_is_rejected_with_its_valid_ones(conn, add_bronze, claude, goolzoom, caplog):
@@ -217,7 +219,10 @@ def test_s18_lot_with_an_invalid_reference_is_rejected_with_its_valid_ones(conn,
 
     assert stored_links(conn) == [(2, REF_A)]
     assert stored_references(conn) == [REF_A]
+    # One line for the invalid reference, then one for the lot
     assert f"REJECTED BOE-B-1 lot 1: reference '{REF_C}'" in caplog.text
+    assert "REJECTED BOE-B-1 lot 1: some of its catastral references are invalid" in caplog.text
+    assert "no catastral references" not in caplog.text
 
 
 def test_savepoint_example_from_the_docs(conn, add_bronze, claude, goolzoom):
