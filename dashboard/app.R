@@ -33,6 +33,7 @@ ui <- page_sidebar(
     ),
     numericInput("price_max", "Precio máximo (€)", NA),
     numericInput("surface_min", "Superficie mínima (m²)", NA),
+    input_switch("only_upcoming", "Solo subastas activas", value=TRUE),
     actionButton("update", "Buscar")
   ),
   layout_columns(
@@ -52,7 +53,11 @@ server <- function(input, output, session) {
         # If you did the line is true for every lot, so it doesnt remove anything
         is.null(input$province)  | province %in% input$province,
         is.na(input$price_max)   | starting_price <= input$price_max,
-        is.na(input$surface_min) | total_surface >= input$surface_min
+        is.na(input$surface_min) | total_surface >= input$surface_min,
+        
+        # If switch is off -> First part is TRUE, so it doesnt apply any filter
+        # filter(TRUE): Returns all rows
+        !input$only_upcoming     | held_date >= Sys.Date() 
       )
   }, ignoreNULL = FALSE)
 
@@ -60,36 +65,34 @@ server <- function(input, output, session) {
     filtered_lots() |>
       mutate(
         qualification = coalesce(qualification, "-"),
-        announcement_url = paste0('<a href="', announcement_url, '" target="_blank">BOE</a>')
+        announcement_url = paste0('<a href="', announcement_url, '" target="_blank">', boe_ref, '</a>')
       ) |>
       select(
-        total_surface, 
-        starting_price, 
-        municipio, 
-        province, 
-        class, 
-        qualification, 
-        use, 
+        held_date,
+        province,
+        municipio,
+        starting_price,
+        total_surface,
         price_per_m2,
+        class,
+        use,
+        qualification,
         reference_count,
-        publication_date, 
-        held_date, 
-        lot_number, 
+        lot_number,
         announcement_url
-      ) |> 
+      ) |>
       datatable(
         colnames = c(
-        "Superficie (m²)"       = "total_surface",
-        "Precio salida"         = "starting_price",
-        "Municipio"             = "municipio",
-        "Provincia"             = "province",
-        "Clase"                 = "class",
-        "Cultivo"               = "qualification",
-        "Uso"                   = "use",
-        "€/m²"                  = "price_per_m2",
-        "Inmuebles"             = "reference_count",
-        "Publicacion"           = "publication_date",
         "Celebracion"           = "held_date",
+        "Provincia"             = "province",
+        "Municipio"             = "municipio",
+        "Precio salida"         = "starting_price",
+        "Superficie (m²)"       = "total_surface",
+        "€/m²"                  = "price_per_m2",
+        "Clase"                 = "class",
+        "Uso"                   = "use",
+        "Cultivo"               = "qualification",
+        "Inmuebles"             = "reference_count",
         "Nº lote"               = "lot_number",
         "Anuncio"               = "announcement_url"
       ),
@@ -99,7 +102,7 @@ server <- function(input, output, session) {
                      before = FALSE, mark = ".", dec.mark = ",", 
                      digits = 0) |> 
       formatRound("Superficie (m²)", digits = 0, mark = ".", dec.mark = ",") |>
-      formatDate(c("Publicacion", "Celebracion"),
+      formatDate("Celebracion",
                  method = "toLocaleDateString", params = list("es-ES")) |> 
       formatCurrency("€/m²", currency = " €", before = FALSE,
                      mark = ".", dec.mark = ",", digits = 2)

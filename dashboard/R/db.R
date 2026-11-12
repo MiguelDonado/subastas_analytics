@@ -14,5 +14,5 @@ connect_subastas_db <- function() {
 }
 
 read_lots <- function(con) {
-  dbGetQuery(con, "SELECT * FROM gold.app_lots WHERE is_latest ORDER BY held_date")
+  dbGetQuery(con, "SELECT * FROM gold.app_lots WHERE is_latest ORDER BY held_date, boe_ref, lot_number")
 }
