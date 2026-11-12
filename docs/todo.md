@@ -12,3 +12,5 @@ test e2e with kaneaiz
 la fecha held_date no es lo mismo que la fecha maxima hasta la que se pueden enviar los sobres cerrados. tal vez añadir una columna??
 
 maybe in the future modify the gold view. and make it equal to 
+
+filters: only active auctions (now < held_date)
