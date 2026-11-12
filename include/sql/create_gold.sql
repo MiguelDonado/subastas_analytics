@@ -135,3 +135,5 @@ LEFT JOIN gold.dim_date held ON held.date_id = f.held_date_id;
 COMMENT ON COLUMN gold.app_lots.announcement_url IS 'Readable page of the announcement, built from source_url. source_url must contain /xml.php, otherwise it indicates a change of format in the BOE links.';
 
 COMMENT ON COLUMN gold.app_lots.qualification IS 'Most common qualification among the references of the lot, ignoring NULLs (the first alphabetically if there is a tie). It does not consider surface. NULL if none of the references has a qualification.';
+
+COMMENT ON COLUMN gold.app_lots.is_latest IS 'TRUE if this is the most recent auction of the lot.';
