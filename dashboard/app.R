@@ -3,6 +3,7 @@ library(leaflet)
 library(bslib)
 library(DT)
 library(dplyr)
+library(stringr)
 
 
 # Santiago de Compostela (initial default view)
@@ -14,14 +15,26 @@ zoom = 13
 con <- connect_subastas_db()
 lots <- read_lots(con) |>
   mutate(
-    municipio = tools::toTitleCase(tolower(municipio)),
-    price_per_m2 = starting_price / total_surface
+    municipio = str_to_title(municipio)
   ) 
 dbDisconnect(con)
 
 ui <- page_sidebar(
-  title = "Subastas",
-  sidebar = sidebar("Filter will go here"),
+  title = "Subastas Analytics",
+  # Filters: an empty filter lets every lot through
+  sidebar = sidebar(
+    open = "always",
+    selectizeInput(
+      "province", 
+      "Provincia", 
+      sort(unique(lots$province)), 
+      multiple = TRUE,
+      options = list(placeholder = "Todas", plugins = list("remove_button"))
+    ),
+    numericInput("price_max", "Precio máximo (€)", NA),
+    numericInput("surface_min", "Superficie mínima (m²)", NA),
+    actionButton("update", "Buscar")
+  ),
   layout_columns(
     col_widths = 12,
     row_heights = c(3, 2), # 60% / 40%
@@ -31,8 +44,20 @@ ui <- page_sidebar(
 )
 
 server <- function(input, output, session) {
-  output$lots <- renderDT(
+  # Lots that match the filters
+  filtered_lots <- eventReactive(input$update, {
     lots |>
+      filter(
+        # First part of each line checks whether you left that filter empty
+        # If you did the line is true for every lot, so it doesnt remove anything
+        is.null(input$province)  | province %in% input$province,
+        is.na(input$price_max)   | starting_price <= input$price_max,
+        is.na(input$surface_min) | total_surface >= input$surface_min
+      )
+  }, ignoreNULL = FALSE)
+
+  output$lots <- renderDT(
+    filtered_lots() |>
       mutate(
         qualification = coalesce(qualification, "-"),
         announcement_url = paste0('<a href="', announcement_url, '" target="_blank">BOE</a>')
@@ -92,7 +117,7 @@ server <- function(input, output, session) {
       ) |>
       addTiles(
         urlTemplate = "https://www.ign.es/wmts/ign-base?request=GetTile&service=WMTS&VERSION=1.0.0&Layer=IGNBaseOrto&Style=default&Format=image/png&TileMatrixSet=GoogleMapsCompatible&TileMatrix={z}&TileRow={y}&TileCol={x}",
-        attribution = "© IGN", group = "Satelite"
+        attribution = "© IGN", group = "Mapa Satelite"
       ) |>
       addTiles(
         urlTemplate = "https://www.ign.es/wmts/mapa-raster?request=GetTile&service=WMTS&VERSION=1.0.0&Layer=MTN&Style=default&Format=image/jpeg&TileMatrixSet=GoogleMapsCompatible&TileMatrix={z}&TileRow={y}&TileCol={x}",
