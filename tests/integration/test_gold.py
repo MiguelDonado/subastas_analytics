@@ -9,7 +9,7 @@ from decimal import Decimal
 
 import psycopg2
 import pytest
-from helpers import HELD_DATE, PUBLICATION_DATE, REF_A, REF_B, REF_C, announcement, catastro_info, lot, rows
+from helpers import OFFER_DEADLINE, PUBLICATION_DATE, REF_A, REF_B, REF_C, announcement, catastro_info, lot, rows
 
 from subastas_analytics.loaders.common import read_sql
 from subastas_analytics.loaders.silver import load_silver
@@ -37,13 +37,13 @@ def test_app_lots_has_one_row_per_lot(conn, add_bronze, claude):
 
     assert app_lots(conn, """
         boe_ref, announcement_url, lot_number, starting_price, total_surface, reference_count,
-        publication_date, held_date, province, municipio, is_latest
+        publication_date, offer_deadline, province, municipio, is_latest
     """) == [
         # Lot 1: the surfaces of its 2 references (75 m² each) are summed
         ("BOE-B-1", "https://www.boe.es/diario_boe/txt.php?id=BOE-B-1", 1, Decimal("50000.00"), Decimal("150.00"), 2,
-         PUBLICATION_DATE, HELD_DATE, "VALLADOLID", "VALLADOLID", True),
+         PUBLICATION_DATE, OFFER_DEADLINE, "VALLADOLID", "VALLADOLID", True),
         ("BOE-B-1", "https://www.boe.es/diario_boe/txt.php?id=BOE-B-1", 2, Decimal("50000.00"), Decimal("75.00"), 1,
-         PUBLICATION_DATE, HELD_DATE, "VALLADOLID", "VALLADOLID", True),
+         PUBLICATION_DATE, OFFER_DEADLINE, "VALLADOLID", "VALLADOLID", True),
     ]
 
 

@@ -15,7 +15,9 @@ candidates = fetch_auction_candidates(date.fromisoformat(test_date))
 urls = [url for _, title, url in candidates if is_auction_title(title)]
 for url in urls:
     auction = fetch_auction(url)
-    announcement, extraction_model = extract_info_announcement(auction["announcement_text"])
-    print(f"\n=== {auction["boe_ref"]} | model: {extraction_model} | held_date: {announcement.held_date} | lots: {len(announcement.lots)}")
+    # fetch_auction returns the publication date as text, for bronze
+    publication_date = date.fromisoformat(auction["publication_date"])
+    announcement, extraction_model = extract_info_announcement(auction["announcement_text"], publication_date)
+    print(f"\n=== {auction["boe_ref"]} | model: {extraction_model} | offer_deadline: {announcement.offer_deadline} | lots: {len(announcement.lots)}")
     for lot in announcement.lots:
         print(f"Lot {lot.lot_number} | {lot.starting_price} | {lot.catastral_references}")
