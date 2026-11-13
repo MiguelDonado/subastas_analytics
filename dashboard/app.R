@@ -7,16 +7,17 @@ library(stringr)
 
 
 # Santiago de Compostela (initial default view)
-lng = -8.5448
-lat = 42.8782
-zoom = 13
+# lng = -8.5448
+# lat = 42.8782
+# zoom = 13
 
 # Lots
 con <- connect_subastas_db()
 lots <- read_lots(con) |>
   mutate(
     municipio = str_to_title(municipio)
-  ) 
+  )
+references <- read_lot_references(con)
 dbDisconnect(con)
 
 ui <- page_sidebar(
@@ -107,10 +108,10 @@ server <- function(input, output, session) {
       formatCurrency("€/m²", currency = " €", before = FALSE,
                      mark = ".", dec.mark = ",", digits = 2)
   )
-      
+  
+  # Static aspects goes with leaflet()
   output$map <- renderLeaflet(
     leaflet() |> 
-      setView(lng = lng, lat = lat, zoom = zoom) |> 
       ############
       # Base group
       ############
@@ -159,6 +160,30 @@ server <- function(input, output, session) {
       ) |> 
       hideGroup(c("Parcelas catastro", "Hidrografia", "Curvas de nivel"))
   )
+  
+  ## Points of the filtered lots: one per catastral reference
+  
+  filtered_points <- reactive(
+    references |> semi_join(filtered_lots(), by = "lot_id")
+  )
+  
+  # Dynamic aspects or updates that is needed should go along leafletProxy()
+  observe({
+    # As a variable cuz its used 3 times, and is clearer than calling filtered_points() each time
+    points <- filtered_points()
+    
+    # Replace the markers
+    leafletProxy("map", data=points) |> 
+      clearMarkers() |> 
+      addCircleMarkers()    # Rather than pins cuz changing their color is easy
+    
+    # Zoom to the results; with no results, leave the map where it is
+    if (nrow(points) > 0) {
+      leafletProxy("map") |>
+        fitBounds(min(points$longitude), min(points$latitude),
+                  max(points$longitude), max(points$latitude))
+    }
+  })
 }
 
 shinyApp(ui, server)

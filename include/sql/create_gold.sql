@@ -124,7 +124,7 @@ SELECT
     attributes.use,
     attributes.class,
     attributes.qualification,
-    history.auction_rank = 1 AS is_latest,
+    history.auction_rank = 1 AS is_latest,  -- TRUE if auction_rank is 1, i.e. the newest auction of the property (or its only one). Otherwise FALSE, i.e. an older auction of the property. In db.R we will do WHERE is_latest to select only the last auction of each property
     round(f.starting_price / f.total_surface, 2) AS price_per_m2  -- at the end: CREATE OR REPLACE VIEW can only add columns at the end
 FROM gold.fact_lots f
 JOIN gold.dim_auctions a USING (auction_id)
@@ -140,3 +140,29 @@ COMMENT ON COLUMN gold.app_lots.qualification IS 'Most common qualification amon
 COMMENT ON COLUMN gold.app_lots.is_latest IS 'TRUE if this is the most recent auction of the lot.';
 
 COMMENT ON COLUMN gold.app_lots.price_per_m2 IS 'Starting price divided by total surface, in € per m², rounded to 2 decimals.';
+
+-- -----------------------------------------------------------------------------
+-- app_lot_references: one row per catastral reference with lot data next to it
+-- For drawing markers in the Shiny app, and for debugging
+-- A view and not a query in db.R, mainly because it's also useful for debugging,
+-- and this way db.R stays a list of simple SELECTs
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE VIEW gold.app_lot_references AS
+SELECT
+    l.lot_id,
+    l.boe_ref,
+    l.lot_number,
+    l.is_latest,
+    l.reference_count,
+    r.catastral_reference,
+    r.latitude,
+    r.longitude,
+    r.surface,
+    r.use,
+    r.class,
+    r.qualification,
+    r.municipio,
+    r.province
+FROM gold.app_lots l
+JOIN gold.lots_catastral_references_bridge b ON b.lot_id = l.lot_id
+JOIN gold.dim_catastral_references r ON r.catastral_reference_id = b.catastral_reference_id;
