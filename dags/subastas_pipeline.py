@@ -98,7 +98,7 @@ def _week_candidates(monday) -> list[tuple[str, str, str]]:
 @dag(
     schedule="0 0 * * 1",   # Mondays at 00:00 UTC
     # Earliest date the DAG can have a scheduled run. Airflow doesnt schedule anything before it
-    start_date=datetime(2026, 9, 1),
+    start_date=datetime(2026, 10, 1),
     # Creates a run for every scheduled time since start_date that hasn't run yet
     catchup=True,
     # One run at a time: two runs in silver would select the same pending announcements and pay Claude twice (S15)

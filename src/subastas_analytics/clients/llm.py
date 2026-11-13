@@ -68,9 +68,10 @@ The BOE publication date is given in <fecha_publicacion>.
 
 Rules:
 - offer_deadline: the earliest date by which an offer must be submitted.
-  - If offers can be submitted in sealed envelopes (sobres), return the last day to submit them, even if there is also bidding at the public act.
+  - If offers can be submitted in sealed envelopes (sobres), return the last day to submit them, even if there is also bidding at the public act. \
+If the announcement doesn't give that day, return the date the auction is held (fecha de celebración).
   - If there are no envelopes and offers are only made at the public act, return the date the auction is held (fecha de celebración).
-  - If the announcement moves the date, return the new one. If it gives no date, return null.
+  - If the announcement moves the date, return the new one. If it gives neither date, return null.
   - If the deadline is given as a period instead of a date (e.g. "30 días naturales desde el día siguiente a la publicación"), calculate it from the publication date. Count "días hábiles" as Monday to Friday and ignore holidays.
 - lot_number: an integer. "Lote nº 3" is 3 and "Uno)" is 1. A single lot with no number ("Lote único") is 1.
 - starting_price: the price of the earliest round offered in this announcement, normally the 1ª subasta. A notice calling only a 3ª subasta gives the 3ª subasta price. Prices are written in Spanish format ("5.271,11 €"); return them as numbers in euros (5271.11). If the text gives none for a lot, return null.
