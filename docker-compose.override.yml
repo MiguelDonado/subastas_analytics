@@ -53,14 +53,30 @@ services:
   # the success ping never arrives.
   postgres:
     restart: "no"
+  # The four below wait until Airflow's database is set up before starting.
+  # Astro only makes them wait until the setup starts, so on a new database they
+  # started too early, failed, and stayed off (because of restart: "no"). 
+  # We want to wait until the setup finishes
   scheduler:
     restart: "no"
+    depends_on:
+      db-migration:
+        condition: service_completed_successfully
   dag-processor:
     restart: "no"
+    depends_on:
+      db-migration:
+        condition: service_completed_successfully
   api-server:
     restart: "no"
+    depends_on:
+      db-migration:
+        condition: service_completed_successfully
   triggerer:
     restart: "no"
+    depends_on:
+      db-migration:
+        condition: service_completed_successfully
 
 # Declares the named volume used above. Without this, Compose fails with
 # `service "cgm-db" refers to undefined volume subastas_db_data`.
