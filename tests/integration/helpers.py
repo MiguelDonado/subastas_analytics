@@ -19,7 +19,7 @@ REF_C = "3333333CC3333C0001CC"
 REF_D = "4444444DD4444D0001DD"
 
 PUBLICATION_DATE = date(2026, 11, 5)
-HELD_DATE = date(2026, 12, 17)
+OFFER_DEADLINE = date(2026, 12, 17)
 
 # The text stored in bronze for each announcement. The fake Claude reads the boe_ref back from it
 TEXT_PREFIX = "Text of "
@@ -30,9 +30,9 @@ def lot(number: int = 1, price: float | None = 50000.0, references: list[str] | 
     return Lot(lot_number=number, starting_price=price, catastral_references=references if references is not None else [REF_A])
 
 
-def announcement(*lots: Lot, held_date: date | None = HELD_DATE) -> Announcement:
+def announcement(*lots: Lot, offer_deadline: date | None = OFFER_DEADLINE) -> Announcement:
     """An announcement as Claude would return it. With no lots given, it has one valid lot."""
-    return Announcement(held_date=held_date, lots=list(lots) if lots else [lot()])
+    return Announcement(offer_deadline=offer_deadline, lots=list(lots) if lots else [lot()])
 
 
 def catastro_info(reference: str, **changes) -> CatastroInfo:

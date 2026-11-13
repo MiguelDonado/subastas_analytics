@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS gold.fact_lots (
     auction_id           BIGINT          NOT NULL REFERENCES gold.dim_auctions (auction_id),
     lot_number           INTEGER         NOT NULL,
     publication_date_id  INTEGER         NOT NULL REFERENCES gold.dim_date (date_id),
-    held_date_id         INTEGER         NOT NULL REFERENCES gold.dim_date (date_id),  
+    offer_deadline_id    INTEGER         NOT NULL REFERENCES gold.dim_date (date_id),
     UNIQUE (auction_id, lot_number)
 );
 
@@ -118,7 +118,7 @@ SELECT
     f.reference_count,
     f.lot_number,
     publication.full_date AS publication_date,
-    held.full_date        AS held_date,
+    deadline.full_date    AS offer_deadline,
     attributes.province,
     attributes.municipio,
     attributes.use,
@@ -131,7 +131,7 @@ JOIN gold.dim_auctions a USING (auction_id)
 JOIN lot_attributes attributes USING (lot_id)
 JOIN lot_history history USING (lot_id)
 JOIN gold.dim_date publication ON publication.date_id = f.publication_date_id
-LEFT JOIN gold.dim_date held ON held.date_id = f.held_date_id;
+LEFT JOIN gold.dim_date deadline ON deadline.date_id = f.offer_deadline_id;
 
 COMMENT ON COLUMN gold.app_lots.announcement_url IS 'Readable page of the announcement, built from source_url. source_url must contain /xml.php, otherwise it indicates a change of format in the BOE links.';
 

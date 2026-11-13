@@ -20,9 +20,10 @@ from subastas_analytics.clients.llm import Announcement, Lot, TitleCheck
 
 TITLE = "Resolución de la Delegación de Economía y Hacienda de Segovia por la que se anuncia subasta"
 ANNOUNCEMENT = Announcement(
-    held_date=date(2026, 12, 17),
+    offer_deadline=date(2026, 12, 17),
     lots=[Lot(lot_number=1, starting_price=53754.21, catastral_references=["6913202UM5161D0008ZP"])],
 )
+PUBLICATION_DATE = date(2026, 11, 5)
 
 
 def fake_response(parsed_output=None, stop_reason="end_turn", model=llm.MODEL, iterations=None):
@@ -107,20 +108,22 @@ def test_b8_title_refused_or_cut_off_raises(claude, stop_reason):
 def test_extraction_returns_the_announcement_and_model_with_one_call(claude):
     set_extraction_response(claude, fake_response(ANNOUNCEMENT))
 
-    assert llm.extract_info_announcement("Texto del anuncio") == (ANNOUNCEMENT, llm.MODEL)
+    assert llm.extract_info_announcement("Texto del anuncio", PUBLICATION_DATE) == (ANNOUNCEMENT, llm.MODEL)
 
     claude.beta.messages.stream.assert_called_once()
     kwargs = claude.beta.messages.stream.call_args.kwargs
     assert kwargs["model"] == llm.MODEL
     assert kwargs["output_format"] is Announcement
     assert kwargs["output_config"] == {"effort": llm.EXTRACTION_EFFORT}
-    assert kwargs["messages"][0]["content"] == "<anuncio>\nTexto del anuncio\n</anuncio>"
+    assert kwargs["messages"][0]["content"] == (
+        "<fecha_publicacion>2026-11-05</fecha_publicacion>\n<anuncio>\nTexto del anuncio\n</anuncio>"
+    )
 
 
 def test_s12_extraction_after_a_fallback_returns_the_fallback_model(claude):
     set_extraction_response(claude, fake_response(ANNOUNCEMENT, iterations=[fallback_usage("claude-sonnet-5-5")]))
 
-    _, model = llm.extract_info_announcement("Texto del anuncio")
+    _, model = llm.extract_info_announcement("Texto del anuncio", PUBLICATION_DATE)
 
     assert model == "claude-sonnet-5-5"
 
@@ -131,7 +134,7 @@ def test_s5_s6_extraction_refused_or_cut_off_raises(claude, stop_reason):
     set_extraction_response(claude, fake_response(stop_reason=stop_reason))
 
     with pytest.raises(RuntimeError):
-        llm.extract_info_announcement("Texto del anuncio")
+        llm.extract_info_announcement("Texto del anuncio", PUBLICATION_DATE)
     claude.beta.messages.stream.assert_called_once()
 
 

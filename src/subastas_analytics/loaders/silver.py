@@ -8,8 +8,8 @@ Problem                                 What happens
  with incomplete Catastro data           the announcement is
  Lot with no references, with any        REJECTED: the lot isn't stored, the rest of the
  invalid one, or with no starting price  announcement is
- No held date, no valid lots, or the     FAILED: only its boe_ref and the reason are stored in
- announcement can't be loaded            failed_announcements, so it isn't sent to Claude
+ No offer deadline, no valid lots, or    FAILED: only its boe_ref and the reason are stored in
+ the announcement can't be loaded        failed_announcements, so it isn't sent to Claude
  (refused by Claude...)                  again. The DAG alerts
  Claude or Goolzoom are down             STOPPED: the run stops, it is tried again on the next run
 """
@@ -174,7 +174,7 @@ def _store_auction(cursor, bronze_row: dict, announcement: Announcement, extract
     ##########################
     cursor.execute(read_sql("insert_silver_auction.sql"), {
         **bronze_row,
-        "held_date": announcement.held_date,
+        "offer_deadline": announcement.offer_deadline,
         "extraction_model": extraction_model,
         "extraction_prompt_hash": PROMPT_HASH,
     })
@@ -245,25 +245,27 @@ def load_silver(conn) -> dict:
                 ######################################
                 # 2. Call Claude API to extract info in a structured way
                 ######################################
-                announcement, extraction_model = extract_info_announcement(pending_auction["announcement_text"])
+                announcement, extraction_model = extract_info_announcement(
+                    pending_auction["announcement_text"], pending_auction["publication_date"]
+                )
 
                 ######################################
-                # Fail it if it has no held date
+                # Fail it if it has no offer deadline
                 ######################################
-                if announcement.held_date is None:
-                    logger.error("FAILED %s: the announcement has no held date", boe_ref)
-                    _record_failure(cursor, pending_auction, "No held date", extraction_model)
+                if announcement.offer_deadline is None:
+                    logger.error("FAILED %s: the announcement has no offer deadline", boe_ref)
+                    _record_failure(cursor, pending_auction, "No offer deadline", extraction_model)
                     conn.commit()
                     failed.append(boe_ref)
                     continue
 
                 ######################################
-                # Fail it if the held date is before the publication date
+                # Fail it if the offer deadline is before the publication date
                 ######################################
-                if announcement.held_date < pending_auction["publication_date"]:
-                    logger.error("FAILED %s: held date %s is before publication date %s",
-                                boe_ref, announcement.held_date, pending_auction["publication_date"])
-                    _record_failure(cursor, pending_auction, "Held date before publication date", extraction_model)
+                if announcement.offer_deadline < pending_auction["publication_date"]:
+                    logger.error("FAILED %s: offer deadline %s is before publication date %s",
+                                boe_ref, announcement.offer_deadline, pending_auction["publication_date"])
+                    _record_failure(cursor, pending_auction, "Offer deadline before publication date", extraction_model)
                     conn.commit()
                     failed.append(boe_ref)
                     continue

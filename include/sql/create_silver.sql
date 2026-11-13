@@ -17,13 +17,14 @@ CREATE TABLE IF NOT EXISTS silver.auctions (
     boe_ref           VARCHAR(30)  NOT NULL UNIQUE,              -- e.g. BOE-B-2026-34259
     announcement_text TEXT         NOT NULL,                     -- copied from bronze.auctions
     publication_date  DATE         NOT NULL,
-    held_date         DATE         NOT NULL,                     
+    offer_deadline    DATE         NOT NULL,
     ingested_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),
     source_url        TEXT         NOT NULL UNIQUE,
     extraction_model          VARCHAR(100)  NOT NULL,
     extraction_prompt_hash    VARCHAR(12)   NOT NULL
 );
 
+COMMENT ON COLUMN silver.auctions.offer_deadline IS 'Earliest date to submit an offer: the deadline for sealed envelopes (sobres) if there are any, otherwise the date the auction is held. The pliego says how to apply.';
 COMMENT ON COLUMN silver.auctions.extraction_model IS 'Claude model that produced this extraction. It can be a fallback instead of the model requested.';
 COMMENT ON COLUMN silver.auctions.extraction_prompt_hash IS 'Hash of the extraction instructions (PROMPT_HASH in clients/llm.py). Changes when the prompt, the output schema or the effort changes.';
 
@@ -78,7 +79,7 @@ CREATE TABLE IF NOT EXISTS silver.lots_catastral_references (
 );
 
 -- -----------------------------------------------------------------------------
--- failed_announcements: every FAILED announcement (no held date, no valid lots, Claude refused, an error...)
+-- failed_announcements: every FAILED announcement (no offer deadline, no valid lots, Claude refused, an error...)
 -- Kept here so that they aren't sent to Claude again on every run. Delete a row to retry it once the cause is fixed.
 -- If it can't be fixed, keep the row and set reviewed_at, so it drops out of the "not reviewed yet" list
 -- ------------------------------------------------------------- ----------------
@@ -94,7 +95,7 @@ CREATE TABLE IF NOT EXISTS silver.failed_announcements (
     review_note  TEXT
 );
 
-COMMENT ON COLUMN silver.failed_announcements.reason IS 'Why it failed: "No held date", "No valid lots", or "<ErrorType>: <message>" for an error';
+COMMENT ON COLUMN silver.failed_announcements.reason IS 'Why it failed: "No offer deadline", "No valid lots", or "<ErrorType>: <message>" for an error';
 COMMENT ON COLUMN silver.failed_announcements.extraction_model IS 'Claude model that produced the extraction this failure is based on. It can be a fallback instead of the model requested. NULL if it failed before Claude answered.';
 COMMENT ON COLUMN silver.failed_announcements.extraction_prompt_hash IS 'Hash of the extraction instructions (PROMPT_HASH in clients/llm.py). Changes when the prompt, the output schema or the effort changes.';
 COMMENT ON COLUMN silver.failed_announcements.reviewed_at IS 'When it was inspected and found to have no fix. NULL = not reviewed yet. Set by hand';

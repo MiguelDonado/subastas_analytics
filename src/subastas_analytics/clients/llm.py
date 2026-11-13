@@ -63,10 +63,15 @@ You extract structured data from Spanish BOE announcements of public auctions \
 held by the Delegaciones de Economía y Hacienda.
 
 Each announcement lists one or more lots (lotes). A lot can contain several catastral references. \
-Each lot has a starting price (tipo de licitación) per auction round.
+Each lot has a starting price (tipo de licitación) per auction round. \
+The BOE publication date is given in <fecha_publicacion>.
 
 Rules:
-- held_date: the local date of the public act or the opening of the offers, not the deadline for submitting them. If the announcement moves the auction to a new date, return the new date. If it gives no date, return null.
+- offer_deadline: the earliest date by which an offer must be submitted.
+  - If offers can be submitted in sealed envelopes (sobres), return the last day to submit them, even if there is also bidding at the public act.
+  - If there are no envelopes and offers are only made at the public act, return the date the auction is held (fecha de celebración).
+  - If the announcement moves the date, return the new one. If it gives no date, return null.
+  - If the deadline is given as a period instead of a date (e.g. "30 días naturales desde el día siguiente a la publicación"), calculate it from the publication date. Count "días hábiles" as Monday to Friday and ignore holidays.
 - lot_number: an integer. "Lote nº 3" is 3 and "Uno)" is 1. A single lot with no number ("Lote único") is 1.
 - starting_price: the price of the earliest round offered in this announcement, normally the 1ª subasta. A notice calling only a 3ª subasta gives the 3ª subasta price. Prices are written in Spanish format ("5.271,11 €"); return them as numbers in euros (5271.11). If the text gives none for a lot, return null.
 - catastral_references: every catastral reference of the properties being sold in the lot, as separate items, copied exactly as written. Ignore references of adjoining parcels mentioned in the boundaries (linderos).
@@ -81,7 +86,7 @@ class Lot(BaseModel):
 
 
 class Announcement(BaseModel):
-    held_date: date | None = Field(description="Local date the auction is held")
+    offer_deadline: date | None = Field(description="Earliest date by which an offer must be submitted")
     lots: list[Lot]
 
 
@@ -111,9 +116,10 @@ def _serving_model(response) -> str:
     return response.model
 
 
-def extract_info_announcement(text: str) -> tuple[Announcement, str]:
+def extract_info_announcement(text: str, publication_date: date) -> tuple[Announcement, str]:
     """Ask Claude to extract the lots of an announcement, validated against `Announcement`.
 
+    publication_date is sent too, because some deadlines are written as a number of days from it.
     Returns the extracted data and the model that produced it.
     """
     client = anthropic.Anthropic()
@@ -128,7 +134,10 @@ def extract_info_announcement(text: str) -> tuple[Announcement, str]:
         max_tokens=64000,
         # General instructions for the model
         system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": f"<anuncio>\n{text}\n</anuncio>"}],
+        messages=[{"role": "user", "content": (
+            f"<fecha_publicacion>{publication_date.isoformat()}</fecha_publicacion>\n"
+            f"<anuncio>\n{text}\n</anuncio>"
+        )}],
         # Converts the Pydantic class into a JSON Schema and sends it with the request
         # The API uses structured outputs, the model's output is constrained to that schema
         output_format=Announcement,

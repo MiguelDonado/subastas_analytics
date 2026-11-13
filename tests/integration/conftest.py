@@ -1,6 +1,7 @@
 """Fixtures for the integration tests: a real Postgres with the project's tables."""
 
 from collections.abc import Iterator
+from datetime import date
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -130,7 +131,7 @@ def claude(monkeypatch):
     """
     answers = {}
 
-    def extract(text: str):
+    def extract(text: str, publication_date: date):
         answer = answers.get(text.removeprefix(TEXT_PREFIX), announcement())
         if isinstance(answer, BaseException):
             raise answer

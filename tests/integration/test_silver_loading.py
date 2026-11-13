@@ -7,7 +7,7 @@ from decimal import Decimal
 import anthropic
 import pytest
 from helpers import (
-    HELD_DATE,
+    OFFER_DEADLINE,
     PUBLICATION_DATE,
     REF_A,
     REF_B,
@@ -58,10 +58,10 @@ def test_announcement_is_stored_in_every_table(conn, add_bronze, claude, goolzoo
         assert load_silver(conn) == {"loaded": ["BOE-B-1"], "failed": []}
 
     assert rows(conn, """
-        SELECT boe_ref, announcement_text, publication_date, held_date, source_url, extraction_model, extraction_prompt_hash
+        SELECT boe_ref, announcement_text, publication_date, offer_deadline, source_url, extraction_model, extraction_prompt_hash
         FROM silver.auctions
     """) == [(
-        "BOE-B-1", TEXT_PREFIX + "BOE-B-1", PUBLICATION_DATE, HELD_DATE,
+        "BOE-B-1", TEXT_PREFIX + "BOE-B-1", PUBLICATION_DATE, OFFER_DEADLINE,
         "https://www.boe.es/diario_boe/xml.php?id=BOE-B-1", MODEL, PROMPT_HASH,
     )]
     assert rows(conn, "SELECT lot_number, starting_price FROM silver.lots ORDER BY 1") == [
@@ -106,11 +106,11 @@ def test_s25_reference_without_crops_is_stored_with_null_qualification(conn, add
     pytest.param(claude_error(anthropic.BadRequestError), "BadRequestError: ", None, id="s4_claude_rejects_the_request"),
     pytest.param(RuntimeError("Claude declined the request"), "RuntimeError: Claude declined the request", None,
                  id="s5_s6_refused_or_cut_off"),
-    pytest.param(announcement(held_date=None), "No held date", MODEL, id="s7_no_held_date"),
-    pytest.param(Announcement(held_date=HELD_DATE, lots=[]), "No valid lots", MODEL, id="s8_no_lots"),
+    pytest.param(announcement(offer_deadline=None), "No offer deadline", MODEL, id="s7_no_offer_deadline"),
+    pytest.param(Announcement(offer_deadline=OFFER_DEADLINE, lots=[]), "No valid lots", MODEL, id="s8_no_lots"),
     pytest.param(announcement(lot(price=None)), "No valid lots", MODEL, id="s9_no_valid_lots"),
-    pytest.param(announcement(held_date=date(2026, 11, 4)), "Held date before publication date", MODEL,
-                 id="s10_held_before_publication"),
+    pytest.param(announcement(offer_deadline=date(2026, 11, 4)), "Offer deadline before publication date", MODEL,
+                 id="s10_deadline_before_publication"),
 ])
 def test_failed_announcement_is_recorded_and_the_next_one_still_loads(conn, add_bronze, claude, caplog,
                                                                      claude_answer, reason, model):

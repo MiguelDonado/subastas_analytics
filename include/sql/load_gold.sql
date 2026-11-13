@@ -22,7 +22,7 @@ FROM (
     -- Inner subquery: Collect the dates
     SELECT publication_date AS full_date FROM silver.auctions
     UNION
-    SELECT held_date FROM silver.auctions WHERE held_date IS NOT NULL
+    SELECT offer_deadline FROM silver.auctions WHERE offer_deadline IS NOT NULL
 ) dates;
 
 INSERT INTO gold.dim_auctions (auction_id, boe_ref, announcement_text, source_url)
@@ -41,7 +41,7 @@ JOIN silver.municipios m USING (municipio_id);
 -- Think of primary keys as identifiers: once PostgreSQL knows the identifier, 
 -- it knows the other attributes belonging to that row.
 INSERT INTO gold.fact_lots
-    (lot_id, starting_price, total_surface, reference_count, auction_id, lot_number, publication_date_id, held_date_id)
+    (lot_id, starting_price, total_surface, reference_count, auction_id, lot_number, publication_date_id, offer_deadline_id)
 SELECT
     l.lot_id,
     l.starting_price,
@@ -50,7 +50,7 @@ SELECT
     l.auction_id,
     l.lot_number,
     to_char(a.publication_date, 'YYYYMMDD')::INTEGER,
-    to_char(a.held_date, 'YYYYMMDD')::INTEGER
+    to_char(a.offer_deadline, 'YYYYMMDD')::INTEGER
 FROM silver.lots l
 JOIN silver.auctions a USING (auction_id)
 JOIN silver.lots_catastral_references lr USING (lot_id)

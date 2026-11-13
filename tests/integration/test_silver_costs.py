@@ -10,7 +10,7 @@ import psycopg2
 import pytest
 import requests
 from helpers import (
-    HELD_DATE,
+    OFFER_DEADLINE,
     REF_A,
     REF_B,
     REF_C,
@@ -54,9 +54,9 @@ ENDINGS = [
     pytest.param(announcement(), {}, "loaded", id="loaded"),
     pytest.param(claude_error(anthropic.BadRequestError), {}, "failed", id="s4_claude_rejects_the_request"),
     pytest.param(RuntimeError("Claude declined the request"), {}, "failed", id="s5_s6_refused_or_cut_off"),
-    pytest.param(announcement(held_date=None), {}, "failed", id="s7_no_held_date"),
-    pytest.param(announcement(held_date=date(2026, 1, 1)), {}, "failed", id="s10_held_before_publication"),
-    pytest.param(Announcement(held_date=HELD_DATE, lots=[]), {}, "failed", id="s8_no_lots"),
+    pytest.param(announcement(offer_deadline=None), {}, "failed", id="s7_no_offer_deadline"),
+    pytest.param(announcement(offer_deadline=date(2026, 1, 1)), {}, "failed", id="s10_deadline_before_publication"),
+    pytest.param(Announcement(offer_deadline=OFFER_DEADLINE, lots=[]), {}, "failed", id="s8_no_lots"),
     pytest.param(announcement(lot(price=None)), {}, "failed", id="s9_no_valid_lots"),
     pytest.param(announcement(lot(1), lot(1)), {}, "failed", id="s19_same_lot_number_twice"),
     pytest.param(announcement(lot(price=0)), {}, "failed", id="s20_price_zero"),
@@ -87,7 +87,7 @@ def test_s1_second_run_makes_no_claude_calls(conn, add_bronze, claude, goolzoom,
 def test_failed_announcement_is_paid_again_only_after_deleting_its_row(conn, add_bronze, claude):
     """The way to retry a FAILED announcement by hand (docs/6.failure_modes.md): delete its row."""
     add_bronze("BOE-B-1")
-    claude.answers["BOE-B-1"] = announcement(held_date=None)
+    claude.answers["BOE-B-1"] = announcement(offer_deadline=None)
     load_silver(conn)
     load_silver(conn)
     assert claude.call_count == 1
@@ -172,7 +172,7 @@ def test_s26_s27_goolzoom_outage_stops_the_run(conn, add_bronze, claude, goolzoo
 
 def test_s33_failed_announcement_then_outage_alerts_once(conn, add_bronze, claude, ping):
     add_bronze("BOE-B-1", "BOE-B-2", "BOE-B-3")
-    claude.answers["BOE-B-1"] = announcement(held_date=None)
+    claude.answers["BOE-B-1"] = announcement(offer_deadline=None)
     claude.answers["BOE-B-2"] = claude_error(anthropic.OverloadedError)
 
     with pytest.raises(anthropic.OverloadedError):

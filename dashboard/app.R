@@ -57,7 +57,7 @@ server <- function(input, output, session) {
         
         # If switch is off -> First part is TRUE, so it doesnt apply any filter
         # filter(TRUE): Returns all rows
-        !input$only_upcoming     | held_date >= Sys.Date() 
+        !input$only_upcoming     | offer_deadline >= Sys.Date()
       )
   }, ignoreNULL = FALSE)
 
@@ -68,7 +68,7 @@ server <- function(input, output, session) {
         announcement_url = paste0('<a href="', announcement_url, '" target="_blank">', boe_ref, '</a>')
       ) |>
       select(
-        held_date,
+        offer_deadline,
         province,
         municipio,
         starting_price,
@@ -83,7 +83,7 @@ server <- function(input, output, session) {
       ) |>
       datatable(
         colnames = c(
-        "Celebracion"           = "held_date",
+        "Plazo ofertas"         = "offer_deadline",
         "Provincia"             = "province",
         "Municipio"             = "municipio",
         "Precio salida"         = "starting_price",
@@ -102,7 +102,7 @@ server <- function(input, output, session) {
                      before = FALSE, mark = ".", dec.mark = ",", 
                      digits = 0) |> 
       formatRound("Superficie (m²)", digits = 0, mark = ".", dec.mark = ",") |>
-      formatDate("Celebracion",
+      formatDate("Plazo ofertas",
                  method = "toLocaleDateString", params = list("es-ES")) |> 
       formatCurrency("€/m²", currency = " €", before = FALSE,
                      mark = ".", dec.mark = ",", digits = 2)
