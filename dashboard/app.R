@@ -5,12 +5,6 @@ library(DT)
 library(dplyr)
 library(stringr)
 
-
-# Santiago de Compostela (initial default view)
-# lng = -8.5448
-# lat = 42.8782
-# zoom = 13
-
 # Lots
 con <- connect_subastas_db()
 lots <- read_lots(con) |>
@@ -21,7 +15,9 @@ references <- read_lot_references(con)
 dbDisconnect(con)
 
 ui <- page_sidebar(
-  title = "Subastas Analytics",
+  #title = "Subastas Analytics",
+  padding = "0.25rem",  # less space around the map and the table
+  gap = "0.25rem",      # less space between the map and the table
   # Filters: an empty filter lets every lot through
   sidebar = sidebar(
     open = "always",
@@ -39,7 +35,7 @@ ui <- page_sidebar(
   ),
   layout_columns(
     col_widths = 12,
-    row_heights = c(3, 2), # 60% / 40%
+    row_heights = c(2, 2), # 60% / 40%
     card(leafletOutput("map"), full_screen = TRUE),
     card(DTOutput("lots"), full_screen = TRUE, class = "small") # small text
   )
@@ -97,7 +93,12 @@ server <- function(input, output, session) {
         "Nº lote"               = "lot_number",
         "Anuncio"               = "announcement_url"
       ),
-      escape = FALSE # show the link as HTML
+      escape = FALSE, # show the link as HTML
+      selection = "single",  # Select only one row at a time
+      options = list(
+        pageLength = 5,       # 5 rows per page, so the table fits without scrolling
+        lengthChange = FALSE # hide the "Show 5 entries" dropdown,
+      )
     ) |>
       formatCurrency("Precio salida", currency = " €", 
                      before = FALSE, mark = ".", dec.mark = ",", 
@@ -110,6 +111,8 @@ server <- function(input, output, session) {
   )
   
   # Static aspects goes with leaflet()
+  # No markers here: filtered_lots also runs at startup (ignoreNULL = FALSE),
+  # so the observe below draws the first markers as soon as the app opens
   output$map <- renderLeaflet(
     leaflet() |> 
       ############
@@ -175,13 +178,35 @@ server <- function(input, output, session) {
     # Replace the markers
     leafletProxy("map", data=points) |> 
       clearMarkers() |> 
-      addCircleMarkers()    # Rather than pins cuz changing their color is easy
+      # layerID: id of the marker
+      addCircleMarkers(layerId = ~catastral_reference)    # Rather than pins cuz changing their color is easy
     
     # Zoom to the results; with no results, leave the map where it is
+    # leafletProxy("map") doesn't create anything, it just sends these commands to the map called "map"
     if (nrow(points) > 0) {
       leafletProxy("map") |>
         fitBounds(min(points$longitude), min(points$latitude),
                   max(points$longitude), max(points$latitude))
+    }
+  })
+  
+  # Clicking a point
+  observeEvent(input$map_marker_click, {
+    points <- filtered_points()
+    reference <- input$map_marker_click$id
+    lot <- points$lot_id[points$catastral_reference == reference]
+    
+    # Position in original filtered_lots (not sorted, searched)
+    row <- which(filtered_lots()$lot_id == lot)
+    
+    # Position in the table as its shown now (sorted, searched)
+    position <- which(input$lots_rows_all == row)
+    
+    # Sends commands to the table already drawn, without rebuilding it
+    dataTableProxy("lots") |> selectRows(row)
+      # Go to its page if the search box doesnt hide it
+    if (length(position) > 0) {
+      dataTableProxy("lots") |> selectPage(ceiling(position / 5))  # 5 = pageLength of the table
     }
   })
 }
