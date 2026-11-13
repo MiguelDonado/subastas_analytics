@@ -111,8 +111,9 @@ def _week_candidates(monday) -> list[tuple[str, str, str]]:
     "on_failure_callback": _on_task_ping_failure,        # Called only when the task fails for good (after its last retry, or right away with AirflowFailException)
     },
     tags=["subastas"],
-    # Makes sure the DAG starts unpaused when Airflow first registers it, so it can run without you clicking anything in the UI.
-    is_paused_upon_creation=False,
+    # The DAG starts paused when Airflow first registers it, so nothing runs (or pays Claude) until you turn it on in the UI.
+    # Airflow remembers the switch afterwards, so this only matters on a new Airflow database
+    is_paused_upon_creation=True,
     # Folder where Airflow looks for .sql files
     template_searchpath=str(SQL_DIR)
     
