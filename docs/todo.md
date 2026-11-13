@@ -1,3 +1,21 @@
+POPUPS, CLUSTER POINTS
+
+The deselect behavior when clicking on the highlighted marker in the map, it will have conflict with popups. SO probably, that beahvior would have to be removed. For now its ok,
+but it may be removed in the near future.
+
+ Popups later. If you add popups, clicking a red marker would deselect the lot and also need to show its info, so think about whether those two go well together then. The red markers would also need their own popup, since they cover the blue ones.
+
+
+
+
+
+
+
+
+
+
+
+
 Capas for shiny application: Hidrografia, 3D (Google Maps), Catastro transparente, IGN
 rotate api key goolzoom, because i paste it unintentionaly in plain text in claude session
 

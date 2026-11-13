@@ -16,6 +16,7 @@ dbDisconnect(con)
 
 ui <- page_sidebar(
   #title = "Subastas Analytics",
+  window_title = "Subastas Analytics",  # name of the browser tab, since there's no title bar
   padding = "0.25rem",  # less space around the map and the table
   gap = "0.25rem",      # less space between the map and the table
   # Filters: an empty filter lets every lot through
@@ -35,7 +36,7 @@ ui <- page_sidebar(
   ),
   layout_columns(
     col_widths = 12,
-    row_heights = c(2, 2), # 60% / 40%
+    row_heights = c(2, 2), # 50% / 50%
     card(leafletOutput("map"), full_screen = TRUE),
     card(DTOutput("lots"), full_screen = TRUE, class = "small") # small text
   )
@@ -57,7 +58,13 @@ server <- function(input, output, session) {
         !input$only_upcoming     | offer_deadline >= Sys.Date()
       )
   }, ignoreNULL = FALSE)
-
+  
+  ####################
+  ####################
+  # TABLE
+  ####################
+  ####################
+  
   output$lots <- renderDT(
     filtered_lots() |>
       mutate(
@@ -96,8 +103,8 @@ server <- function(input, output, session) {
       escape = FALSE, # show the link as HTML
       selection = "single",  # Select only one row at a time
       options = list(
-        pageLength = 5,       # 5 rows per page, so the table fits without scrolling
-        lengthChange = FALSE # hide the "Show 5 entries" dropdown,
+        pageLength = 5,      # 5 rows per page, so the table fits without scrolling
+        lengthChange = FALSE # hide the "Show 5 entries" dropdown
       )
     ) |>
       formatCurrency("Precio salida", currency = " €", 
@@ -110,7 +117,13 @@ server <- function(input, output, session) {
                      mark = ".", dec.mark = ",", digits = 2)
   )
   
-  # Static aspects goes with leaflet()
+  ####################
+  ####################
+  # MAP (STATIC)
+  ####################
+  ####################
+  
+  # The parts of the map that never change go in leaflet()
   # No markers here: filtered_lots also runs at startup (ignoreNULL = FALSE),
   # so the observe below draws the first markers as soon as the app opens
   output$map <- renderLeaflet(
@@ -164,13 +177,18 @@ server <- function(input, output, session) {
       hideGroup(c("Parcelas catastro", "Hidrografia", "Curvas de nivel"))
   )
   
-  ## Points of the filtered lots: one per catastral reference
+  ####################
+  ####################
+  # MAP (DYNAMIC): Draw markers for all filtered lots in the table and zoom
+  ####################
+  ####################
   
+  ## Points of the filtered lots: one per catastral reference
   filtered_points <- reactive(
     references |> semi_join(filtered_lots(), by = "lot_id")
   )
   
-  # Dynamic aspects or updates that is needed should go along leafletProxy()
+  # Changes to the map that's already drawn go through leafletProxy()
   observe({
     # As a variable cuz its used 3 times, and is clearer than calling filtered_points() each time
     points <- filtered_points()
@@ -178,7 +196,7 @@ server <- function(input, output, session) {
     # Replace the markers
     leafletProxy("map", data=points) |> 
       clearMarkers() |> 
-      # layerID: id of the marker
+      # layerId: id of the marker, the catastral reference because ids must be unique
       addCircleMarkers(layerId = ~catastral_reference)    # Rather than pins cuz changing their color is easy
     
     # Zoom to the results; with no results, leave the map where it is
@@ -190,25 +208,69 @@ server <- function(input, output, session) {
     }
   })
   
-  # Clicking a point
+  ####################
+  ####################
+  # Clicking a marker -> Select its row in the table
+  ####################
+  ####################
+  
   observeEvent(input$map_marker_click, {
     points <- filtered_points()
     reference <- input$map_marker_click$id
+    
+    # Red markers (the selected lot) have no id: clicking one deselects the lot
+    if (is.null(reference)) {
+      dataTableProxy("lots") |> selectRows(NULL)
+      return()
+    }
     lot <- points$lot_id[points$catastral_reference == reference]
     
-    # Position in original filtered_lots (not sorted, searched)
+    # Position in filtered_lots, before any sorting or searching
     row <- which(filtered_lots()$lot_id == lot)
     
-    # Position in the table as its shown now (sorted, searched)
+    # Position in the table as it's shown now (after sorting and searching)
     position <- which(input$lots_rows_all == row)
     
     # Sends commands to the table already drawn, without rebuilding it
     dataTableProxy("lots") |> selectRows(row)
-      # Go to its page if the search box doesnt hide it
+    # Go to its page if the search box doesn't hide it
     if (length(position) > 0) {
       dataTableProxy("lots") |> selectPage(ceiling(position / 5))  # 5 = pageLength of the table
     }
   })
+  
+  ####################
+  ####################
+  # Selecting a row (by clicking it, or one of its markers) -> highlight and zoom to its markers
+  ####################
+  ####################
+  
+  # lots_rows_selected: holds the selected row's number (original table, not sorted)
+  observeEvent(input$lots_rows_selected, {
+    # Remove the previous highlight
+    leafletProxy("map") |>  clearGroup("selected")
+    
+    row <- input$lots_rows_selected
+    # If some row is selected
+    if(!is.null(row)) {
+      lot <- filtered_lots()$lot_id[row]
+      points <- filtered_points() |> filter(lot_id == lot)
+      
+      # On top of the blue markers
+      leafletProxy("map", data = points) |> 
+        addCircleMarkers(
+          color = "red",
+          group = "selected",
+        ) |> 
+        fitBounds(min(points$longitude), min(points$latitude),
+                 max(points$longitude), max(points$latitude))
+    }
+  }, 
+  # Reaction is triggered even when lots_rows_selected is NULL
+  # So when we deselect, the red markers are cleared, cuz clearGroup("selected") is executed.
+  ignoreNULL = FALSE
+  )  
+  
 }
 
 shinyApp(ui, server)
