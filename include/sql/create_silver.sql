@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS silver.auctions (
     extraction_prompt_hash    VARCHAR(12)   NOT NULL
 );
 
-COMMENT ON COLUMN silver.auctions.offer_deadline IS 'Earliest date to submit an offer: the deadline for sealed envelopes (sobres) if there are any, otherwise the date the auction is held. The pliego says how to apply.';
+COMMENT ON COLUMN silver.auctions.offer_deadline IS 'Earliest date to submit an offer: the deadline for sealed envelopes (sobres), or the date the auction is held if there are no envelopes or the announcement does not give their deadline. The pliego says how to apply.';
 COMMENT ON COLUMN silver.auctions.extraction_model IS 'Claude model that produced this extraction. It can be a fallback instead of the model requested.';
 COMMENT ON COLUMN silver.auctions.extraction_prompt_hash IS 'Hash of the extraction instructions (PROMPT_HASH in clients/llm.py). Changes when the prompt, the output schema or the effort changes.';
 

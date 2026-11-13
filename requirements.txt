@@ -15,3 +15,4 @@
 
 # Lets Airflow talk to your database
 apache-airflow-providers-postgres
+astro-run-dag # This package is needed for the astro run command. It will be removed before a deploy
