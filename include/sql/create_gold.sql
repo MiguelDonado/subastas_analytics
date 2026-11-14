@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS gold.fact_lots (
     lot_number           INTEGER         NOT NULL,
     publication_date_id  INTEGER         NOT NULL REFERENCES gold.dim_date (date_id),
     offer_deadline_id    INTEGER         NOT NULL REFERENCES gold.dim_date (date_id),
+    ingested_date_id     INTEGER         NOT NULL REFERENCES gold.dim_date (date_id),  -- day silver loaded its announcement, i.e. when it reached the app
     UNIQUE (auction_id, lot_number)
 );
 
@@ -125,13 +126,15 @@ SELECT
     attributes.class,
     attributes.qualification,
     history.auction_rank = 1 AS is_latest,  -- TRUE if auction_rank is 1, i.e. the newest auction of the property (or its only one). Otherwise FALSE, i.e. an older auction of the property. In db.R we will do WHERE is_latest to select only the last auction of each property
-    round(f.starting_price / f.total_surface, 2) AS price_per_m2  -- at the end: CREATE OR REPLACE VIEW can only add columns at the end
+    round(f.starting_price / f.total_surface, 2) AS price_per_m2,  -- at the end: CREATE OR REPLACE VIEW can only add columns at the end
+    ingested.full_date    AS ingested_date
 FROM gold.fact_lots f
 JOIN gold.dim_auctions a USING (auction_id)
 JOIN lot_attributes attributes USING (lot_id)
 JOIN lot_history history USING (lot_id)
 JOIN gold.dim_date publication ON publication.date_id = f.publication_date_id
-LEFT JOIN gold.dim_date deadline ON deadline.date_id = f.offer_deadline_id;
+LEFT JOIN gold.dim_date deadline ON deadline.date_id = f.offer_deadline_id
+JOIN gold.dim_date ingested ON ingested.date_id = f.ingested_date_id;
 
 COMMENT ON COLUMN gold.app_lots.announcement_url IS 'Readable page of the announcement, built from source_url. source_url must contain /xml.php, otherwise it indicates a change of format in the BOE links.';
 
@@ -140,6 +143,8 @@ COMMENT ON COLUMN gold.app_lots.qualification IS 'Most common qualification amon
 COMMENT ON COLUMN gold.app_lots.is_latest IS 'TRUE if this is the most recent auction of the lot.';
 
 COMMENT ON COLUMN gold.app_lots.price_per_m2 IS 'Starting price divided by total surface, in € per m², rounded to 2 decimals.';
+
+COMMENT ON COLUMN gold.app_lots.ingested_date IS 'Day the announcement reached the app (loaded into silver, Spanish time). Not the publication date: a lot published on Tuesday is only loaded the next Monday, and a failed announcement that is fixed later gets the day it was finally loaded.';
 
 -- -----------------------------------------------------------------------------
 -- app_lot_references: one row per catastral reference with lot data next to it

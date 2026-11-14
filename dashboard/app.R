@@ -52,6 +52,14 @@ ui <- page_sidebar(
     numericInput("surface_min", "Superficie mínima (m²)", NA),
     # To find one announcement: part of the BOE reference is enough, e.g. "12345"
     textInput("boe_ref", "Anuncio (BOE)", placeholder = "BOE-B-2026-12345"),
+    # Weekly check: only the lots that reached the app since that day (your last visit)
+    # value = NA leaves it empty (NULL would put today), but Shiny warns about NA, so it's silenced
+    suppressWarnings(
+      dateInput("new_since", "Nuevos desde", value = NA,
+                format = "dd/mm/yyyy", language = "es", weekstart = 1)
+    ) |> 
+    # Clear button at the bottom of the calendar ("Borrar" in Spanish), to empty the box
+    tagAppendAttributes(`data-date-clear-btn` = "true", .cssSelector = "input"),
     input_switch("only_upcoming", "Solo subastas activas", value=TRUE),
     actionButton("update", "Buscar")
   ),
@@ -79,6 +87,8 @@ server <- function(input, output, session) {
         # Lots whose boe_ref contains what was typed (plain text, any case)
         # if/else, not |: | would also run str_detect on an empty box, which warns
         if (boe_text == "") TRUE else str_detect(boe_ref, fixed(boe_text, ignore_case = TRUE)),
+        # Empty box (isTruthy is FALSE) -> TRUE for every lot, so nothing is removed
+        if (isTruthy(input$new_since)) ingested_date >= input$new_since else TRUE,
         # If switch is off -> First part is TRUE, so it doesnt apply any filter
         # filter(TRUE): Returns all rows
         !input$only_upcoming     | offer_deadline >= Sys.Date()
