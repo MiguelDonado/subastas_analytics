@@ -109,7 +109,7 @@ server <- function(input, output, session) {
       selection = "single",  # Select only one row at a time
       options = list(
         pageLength = 5,      # 5 rows per page, so the table fits without scrolling
-        lengthChange = FALSE # hide the "Show 5 entries" dropdown
+        dom = "tip"          # only the table, the info line and the pages: no search box (the map wouldn't follow it) and no "Show 5 entries" dropdown
       )
     ) |>
       formatCurrency("Precio salida", currency = " €", 
@@ -230,18 +230,17 @@ server <- function(input, output, session) {
     }
     lot <- points$lot_id[points$catastral_reference == reference]
     
-    # Position in filtered_lots, before any sorting or searching
+    # Position in filtered_lots, before any sorting
     row <- which(filtered_lots()$lot_id == lot)
-    
-    # Position in the table as it's shown now (after sorting and searching)
+
+    # Position in the table as it's shown now (after sorting)
     position <- which(input$lots_rows_all == row)
-    
+
     # Sends commands to the table already drawn, without rebuilding it
-    dataTableProxy("lots") |> selectRows(row)
-    # Go to its page if the search box doesn't hide it
-    if (length(position) > 0) {
-      dataTableProxy("lots") |> selectPage(ceiling(position / 5))  # 5 = pageLength of the table
-    }
+    # and goes to the page of that row
+    dataTableProxy("lots") |>
+      selectRows(row) |>
+      selectPage(ceiling(position / 5))  # 5 = pageLength of the table
   })
   
   ####################

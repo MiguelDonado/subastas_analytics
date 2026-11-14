@@ -15,7 +15,7 @@ QUE ME QUEDE CLARO EN .RENV y .ENV en dashboard para que se usa cada uno
 
 write down that if i want to visualize clasificacion del suelo (urbanizable o no...) existe para españa el visorSIU https://www.mivau.gob.es/urbanismo-y-suelo/sistema-de-informacion-urbana
 
-test e2e with kaneaiz
+test e2e with kaneaiz or shinytest2
 
 in the future use an open source llm, to not spend any money, and so that it is free
 
