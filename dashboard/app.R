@@ -4,6 +4,7 @@ library(bslib)
 library(DT)
 library(dplyr)
 library(stringr)
+library(shinydisconnect)
 
 # Lots
 con <- connect_subastas_db()
@@ -15,6 +16,10 @@ references <- read_lot_references(con)
 dbDisconnect(con)
 
 ui <- page_sidebar(
+  disconnectMessage(
+    text = "Se ha perdido la conexión con el servidor.",
+    refresh = "Recargar"
+  ),
   #title = "Subastas Analytics",
   window_title = "Subastas Analytics",  # name of the browser tab, since there's no title bar
   padding = "0.25rem",  # less space around the map and the table
