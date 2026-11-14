@@ -23,6 +23,8 @@ FROM (
     SELECT publication_date AS full_date FROM silver.auctions
     UNION
     SELECT offer_deadline FROM silver.auctions WHERE offer_deadline IS NOT NULL
+    UNION
+    SELECT (ingested_at AT TIME ZONE 'Europe/Madrid')::DATE FROM silver.auctions
 ) dates;
 
 INSERT INTO gold.dim_auctions (auction_id, boe_ref, announcement_text, source_url)
@@ -41,7 +43,7 @@ JOIN silver.municipios m USING (municipio_id);
 -- Think of primary keys as identifiers: once PostgreSQL knows the identifier, 
 -- it knows the other attributes belonging to that row.
 INSERT INTO gold.fact_lots
-    (lot_id, starting_price, total_surface, reference_count, auction_id, lot_number, publication_date_id, offer_deadline_id)
+    (lot_id, starting_price, total_surface, reference_count, auction_id, lot_number, publication_date_id, offer_deadline_id, ingested_date_id)
 SELECT
     l.lot_id,
     l.starting_price,
@@ -50,7 +52,8 @@ SELECT
     l.auction_id,
     l.lot_number,
     to_char(a.publication_date, 'YYYYMMDD')::INTEGER,
-    to_char(a.offer_deadline, 'YYYYMMDD')::INTEGER
+    to_char(a.offer_deadline, 'YYYYMMDD')::INTEGER,
+    to_char(a.ingested_at AT TIME ZONE 'Europe/Madrid', 'YYYYMMDD')::INTEGER  -- Spanish day, so a Monday 00:00 UTC run is still Monday
 FROM silver.lots l
 JOIN silver.auctions a USING (auction_id)
 JOIN silver.lots_catastral_references lr USING (lot_id)
