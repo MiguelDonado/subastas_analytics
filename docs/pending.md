@@ -1,8 +1,7 @@
 Dashboard features
 
 1. Popups. Your todo already notes a conflict: clicking a red marker currently deselects the lot. With popups, one click would deselect and open a popup at the same time. The red markers would also need their own popup, because they cover the blue ones. Decide on that behaviour before building.
-2. Cluster points. clusterOptions = markerClusterOptions() on addCircleMarkers. Check that clicking a marker, highlighting and zooming still work when the lot's markers are inside a cluster.
-3. Lot reviews (interested / maybe / discarded + notes), plus the Status filter. The design is already in docs/3.app_design.md (app.lot_reviews). On login:
+2. Lot reviews (interested / maybe / discarded + notes), plus the Status filter. The design is already in docs/3.app_design.md (app.lot_reviews). On login:
    - If you're the only person marking lots, you don't need a full user system. You do need a gate, though: once the app is public on Connect Cloud, anyone with the URL could change your marks. Options:
      - Make the app private on Connect Cloud. I'm not sure the free plan allows that, so check.
      - A single password, stored as an env var, that unlocks editing.
