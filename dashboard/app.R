@@ -35,6 +35,13 @@ ui <- page_sidebar(
       options = list(placeholder = "Todas", plugins = list("remove_button"))
     ),
     selectizeInput(
+      "municipio",
+      "Municipio",
+      sort(unique(lots$municipio)),
+      multiple = TRUE,
+      options = list(placeholder = "Todos", plugins = list("remove_button"))
+    ),
+    selectizeInput(
       "class",
       "Clase",
       sort(unique(lots$class)),
@@ -59,24 +66,45 @@ ui <- page_sidebar(
 server <- function(input, output, session) {
   # Lots that match the filters
   filtered_lots <- eventReactive(input$update, {
+    boe_text <- str_trim(input$boe_ref)  # spaces around what was typed removed
     lots |>
       filter(
         # First part of each line checks whether you left that filter empty
         # If you did the line is true for every lot, so it doesnt remove anything
         is.null(input$province)  | province %in% input$province,
+        is.null(input$municipio) | municipio %in% input$municipio,
         is.null(input$class)     | class %in% input$class,
         is.na(input$price_max)   | starting_price <= input$price_max,
         is.na(input$surface_min) | total_surface >= input$surface_min,
-        # An empty text box is "", not NULL
-        # Keeps the lots whose boe_ref contains what was typed: spaces around it removed,
-        # fixed = plain text, not a regular expression; ignore_case = upper or lower case doesn't matter
-        str_trim(input$boe_ref) == "" | str_detect(boe_ref, fixed(str_trim(input$boe_ref), ignore_case = TRUE)),
-        
+        # Lots whose boe_ref contains what was typed (plain text, any case)
+        # if/else, not |: | would also run str_detect on an empty box, which warns
+        if (boe_text == "") TRUE else str_detect(boe_ref, fixed(boe_text, ignore_case = TRUE)),
         # If switch is off -> First part is TRUE, so it doesnt apply any filter
         # filter(TRUE): Returns all rows
         !input$only_upcoming     | offer_deadline >= Sys.Date()
       )
   }, ignoreNULL = FALSE)
+  
+  ####################
+  ####################
+  # Filters (municipio filter linked with province filter)
+  ####################
+  ####################
+  
+  # The municipios offered are the ones of the selected provinces 
+  # (all of them if none is selected)
+  # observeEvent, cuz we do not want to take a reactive dependency on input$municipio
+  observeEvent(input$province, {
+    choices <- lots |> 
+      filter(is.null(input$province) | province %in% input$province) |> 
+      pull(municipio) |> unique() |> sort()
+    # Keep the municipios already picked that are still in the list
+    updateSelectizeInput(session, "municipio", choices = choices, 
+                         selected = intersect(input$municipio, choices))
+  },
+  # Removing every province makes input$province NULL. By default observeEvent ignores NULL,
+  # so the list would keep the last province's municipios. With FALSE it runs and shows all of them
+  ignoreNULL = FALSE)
   
   ####################
   ####################
@@ -278,8 +306,8 @@ server <- function(input, output, session) {
       leafletProxy("map", data = points) |> 
         addCircleMarkers(
           color = "red",
-          group = "selected",
-        ) |> 
+          group = "selected"
+        ) |>
         fitBounds(min(points$longitude), min(points$latitude),
                  max(points$longitude), max(points$latitude))
     }
