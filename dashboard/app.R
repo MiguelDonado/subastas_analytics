@@ -12,7 +12,20 @@ lots <- read_lots(con) |>
   mutate(
     municipio = str_to_title(municipio)
   )
-references <- read_lot_references(con)
+references <- read_lot_references(con) |>
+  mutate(
+    # Text of each marker's popup: the parcel's own data (the lot's is in the table)
+    popup = paste0(
+      "Ref. Cat.: <b>", catastral_reference, "</b><br>",
+      "Uso: ", use, "<br>",
+      "Clase: ", class, "<br>",
+      "Superficie parcela: ", formatC(surface, format = "f", digits = 0, big.mark = ".", decimal.mark = ","), " m²<br>",
+      "Cultivo: ", coalesce(qualification, "-"), "<br>",
+      # Google's official link format, so it won't change
+      '<a href="https://www.google.com/maps/search/?api=1&query=', latitude, ",", longitude,
+      '" target="_blank">Abrir en Google Maps</a>'
+    )
+  )
 dbDisconnect(con)
 
 ui <- page_sidebar(
@@ -254,7 +267,9 @@ server <- function(input, output, session) {
     leafletProxy("map", data=points) |> 
       clearMarkers() |> 
       # layerId: id of the marker, the catastral reference because ids must be unique
-      addCircleMarkers(layerId = ~catastral_reference)    # Rather than pins cuz changing their color is easy
+      # No lng/lat arguments: leaflet finds the latitude and longitude columns of the data and places the markers there
+      addCircleMarkers(layerId = ~catastral_reference,  # Rather than pins cuz changing their color is easy
+                       popup = ~popup)
     
     # Zoom to the results; with no results, leave the map where it is
     # leafletProxy("map") doesn't create anything, it just sends these commands to the map called "map"
@@ -275,11 +290,9 @@ server <- function(input, output, session) {
     points <- filtered_points()
     reference <- input$map_marker_click$id
     
-    # Red markers (the selected lot) have no id: clicking one deselects the lot
-    if (is.null(reference)) {
-      dataTableProxy("lots") |> selectRows(NULL)
-      return()
-    }
+    # Red markers (the selected lot) have no id: clicking one only opens its popup.
+    # return() skips the rest of the code, so nothing changes and the lot stays selected
+    if (is.null(reference)) return()
     lot <- points$lot_id[points$catastral_reference == reference]
     
     # Position in filtered_lots, before any sorting
@@ -316,7 +329,8 @@ server <- function(input, output, session) {
       leafletProxy("map", data = points) |> 
         addCircleMarkers(
           color = "red",
-          group = "selected"
+          group = "selected",
+          popup = ~popup  # they cover the blue ones, so they need the same popup
         ) |>
         fitBounds(min(points$longitude), min(points$latitude),
                  max(points$longitude), max(points$latitude))

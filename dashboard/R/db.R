@@ -19,5 +19,5 @@ read_lots <- function(con) {
 
 
 read_lot_references <- function(con) {
-  dbGetQuery(con, "SELECT lot_id, catastral_reference, latitude, longitude FROM gold.app_lot_references WHERE is_latest")
+  dbGetQuery(con, "SELECT lot_id, catastral_reference, latitude, longitude, use, class, surface, qualification FROM gold.app_lot_references WHERE is_latest")
 }

@@ -1,5 +1,3 @@
-POPUPS (google maps url). 
-
 QUE ME QUEDE CLARO EN .RENV y .ENV en dashboard para que se usa cada uno
 
 test e2e with kaneaiz or shinytest2
