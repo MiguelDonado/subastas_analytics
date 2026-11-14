@@ -34,8 +34,17 @@ ui <- page_sidebar(
       multiple = TRUE,
       options = list(placeholder = "Todas", plugins = list("remove_button"))
     ),
+    selectizeInput(
+      "class",
+      "Clase",
+      sort(unique(lots$class)),
+      multiple = TRUE,
+      options = list(placeholder = "Todas", plugins = list("remove_button"))
+    ),
     numericInput("price_max", "Precio máximo (€)", NA),
     numericInput("surface_min", "Superficie mínima (m²)", NA),
+    # To find one announcement: part of the BOE reference is enough, e.g. "12345"
+    textInput("boe_ref", "Anuncio (BOE)", placeholder = "BOE-B-2026-12345"),
     input_switch("only_upcoming", "Solo subastas activas", value=TRUE),
     actionButton("update", "Buscar")
   ),
@@ -55,8 +64,13 @@ server <- function(input, output, session) {
         # First part of each line checks whether you left that filter empty
         # If you did the line is true for every lot, so it doesnt remove anything
         is.null(input$province)  | province %in% input$province,
+        is.null(input$class)     | class %in% input$class,
         is.na(input$price_max)   | starting_price <= input$price_max,
         is.na(input$surface_min) | total_surface >= input$surface_min,
+        # An empty text box is "", not NULL
+        # Keeps the lots whose boe_ref contains what was typed: spaces around it removed,
+        # fixed = plain text, not a regular expression; ignore_case = upper or lower case doesn't matter
+        str_trim(input$boe_ref) == "" | str_detect(boe_ref, fixed(str_trim(input$boe_ref), ignore_case = TRUE)),
         
         # If switch is off -> First part is TRUE, so it doesnt apply any filter
         # filter(TRUE): Returns all rows

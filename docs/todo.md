@@ -23,3 +23,8 @@ pnoa historico (no creo que sea interesante para comprar una finca)
 
  A link to Google Maps 3D for the selected parcel (cheapest real 3D). Put it in the popup or the table, built from the marker's coordinates:
    https://www.google.com/maps/@{lat},{lon},150a,35y,0h,60t/data=!3m1!1e3
+
+
+La superficie que aparece para una vivienda no es la mas correcta, por ejemplo Valladolid BOE-B-2026-36159. Pone 500m2, eso es el edificio entero, pero el apartamento es menos.
+
+there is a way to make catastro lines a bit thicker?
