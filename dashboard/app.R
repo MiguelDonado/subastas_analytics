@@ -94,8 +94,14 @@ ui <- secure_app(ui)
 app_server <- function(input, output, session, user_id) {
   # Lots that match the filters
   filtered_lots <- eventReactive(input$update, {
+    # The user's notes are read on every search, so they always match what's saved
+    con <- connect_subastas_db()
+    on.exit(dbDisconnect(con))  # closes the connection however this code ends
+    notes <- read_user_notes(con, user_id)
+
     boe_text <- str_trim(input$boe_ref)  # spaces around what was typed removed
     lots |>
+      left_join(notes, by = c("boe_ref", "lot_number")) |>  # notes is NA when the lot has none
       filter(
         # First part of each line checks whether you left that filter empty
         # If you did the line is true for every lot, so it doesnt remove anything
