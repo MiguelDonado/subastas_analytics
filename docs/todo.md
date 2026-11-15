@@ -7,3 +7,6 @@ in the future use an open source llm, to not spend any money, and so that it is 
 La superficie que aparece para una vivienda no es la mas correcta, por ejemplo Valladolid BOE-B-2026-36159. Pone 500m2, eso es el edificio entero, pero el apartamento es menos.
 
 leyenda mapa topografico
+
+
+maybe in the future, do better, the reviews stuff. Create an OLTP for this feature, and then combine it with the OLAP.

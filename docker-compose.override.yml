@@ -26,7 +26,7 @@ services:
     env_file:
       - ./subastas-db.env
 
-    # host port : container port. Exposes Postgres on localhost:5433 for psql or
+    # host port : container port. Exposes Postgres on localhost:5435 for psql or
     # DBeaver on the host (5432 is taken by Astro's own Postgres). Airflow doesn't
     # use this mapping: it talks to subastas-db:5432 directly over the Docker network.
     ports:
