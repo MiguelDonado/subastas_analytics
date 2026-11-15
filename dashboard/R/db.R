@@ -21,3 +21,11 @@ read_lots <- function(con) {
 read_lot_references <- function(con) {
   dbGetQuery(con, "SELECT lot_id, catastral_reference, latitude, longitude, use, class, surface, qualification FROM gold.app_lot_references WHERE is_latest")
 }
+
+read_user_notes <- function(con, user_id) {
+  dbGetQuery(
+    con,
+    "SELECT boe_ref, lot_number, notes FROM app.lot_reviews WHERE user_id = $1",
+    params = list(user_id)
+  )
+}
