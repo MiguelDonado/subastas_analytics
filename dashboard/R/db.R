@@ -29,3 +29,25 @@ read_user_notes <- function(con, user_id) {
     params = list(user_id)
   )
 }
+
+# Save a user's note on a lot. An empty note deletes the row, so a row only exists if the note has text
+save_user_note <- function(con, user_id, boe_ref, lot_number, notes){
+  if (str_trim(notes) == ""){    # notes that are only spaces count as empty
+    dbExecute(con, 
+              "DELETE FROM app.lot_reviews WHERE user_id = $1 AND boe_ref = $2 AND lot_number = $3",
+              params = list(user_id, boe_ref, lot_number))
+  } else {
+    dbExecute(con, 
+              "INSERT INTO app.lot_reviews (user_id, boe_ref, lot_number, notes)
+              VALUES ($1, $2, $3, $4)
+              ON CONFLICT (user_id, boe_ref, lot_number)
+              DO UPDATE SET notes = EXCLUDED.notes, updated_at = now()",   # EXCLUDED.notes: note that was just sent
+            params = list(user_id, boe_ref, lot_number, notes)
+              )
+  }
+}
+
+
+
+
+

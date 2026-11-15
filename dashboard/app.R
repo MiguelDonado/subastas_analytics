@@ -40,6 +40,7 @@ ui <- page_sidebar(
   gap = "0.25rem",      # less space between the map and the table
   # Filters: an empty filter lets every lot through
   sidebar = sidebar(
+    gap = "0.75rem",
     open = "always",
     selectizeInput(
       "province", 
@@ -75,7 +76,13 @@ ui <- page_sidebar(
     # Clear button at the bottom of the calendar ("Borrar" in Spanish), to empty the box
     tagAppendAttributes(`data-date-clear-btn` = "true", .cssSelector = "input"),
     input_switch("only_upcoming", "Solo subastas activas", value=TRUE),
-    actionButton("update", "Buscar")
+    actionButton("update", "Buscar"), 
+    card(
+      class = "bg-warning-subtle border-warning",
+      textAreaInput("note", "Nota del lote", rows = 4, resize = "vertical"),
+      # disabled: cuz there is no lot to save to until a row is selected
+      actionButton("save_note", "Guardar", disabled = TRUE)
+    )
   ),
   layout_columns(
     col_widths = 12,
@@ -354,6 +361,40 @@ app_server <- function(input, output, session, user_id) {
   ignoreNULL = FALSE
   )
 
+  ####################
+  ####################
+  # Lot note: selecting a row fills the box with its note
+  ####################
+  ####################
+
+  # The note is read from the database, so the box always shows the last saved note.
+  # lots_rows_selected: holds the selected row's number (original table, not sorted)
+  observeEvent(input$lots_rows_selected, {
+    row <- input$lots_rows_selected
+
+    # No row selected: empty box, save button disabled
+    if (is.null(row)) {
+      updateTextAreaInput(session, "note", value = "")
+      updateActionButton(session, "save_note", disabled = TRUE)
+      return()
+    }
+
+    lot <- filtered_lots()[row, ]
+    con <- connect_subastas_db()
+    on.exit(dbDisconnect(con))  # closes the connection however this code ends
+    note <- read_user_notes(con, user_id) |>
+      # The selected lot's row: 0 rows if it has no note
+      filter(boe_ref == lot$boe_ref, lot_number == lot$lot_number) |>
+      pull(notes)
+
+    # note: the lot's note, or empty vector (character(0)) if it has none.
+    # Then "" is sent explicitly, otherwise the box could keep the previous lot's note
+    updateTextAreaInput(session, "note", value = if (length(note) == 1) note else "")
+    updateActionButton(session, "save_note", disabled = FALSE)
+  },
+  # Same as above: also runs when the row is deselected, to empty the box
+  ignoreNULL = FALSE
+  )
 }
 
 server <- function(input, output, session) {
