@@ -5,6 +5,7 @@ library(DT)
 library(dplyr)
 library(stringr)
 library(shinydisconnect)
+library(shinymanager)
 
 # Lots
 con <- connect_subastas_db()
@@ -84,7 +85,13 @@ ui <- page_sidebar(
   )
 )
 
-server <- function(input, output, session) {
+# Login screen in front of the whole app: nothing above is shown until the user logs in
+ui <- secure_app(ui)
+
+# All the app's server code: filters, table, map, markers...
+# Only started after a correct login (see server at the end of the file)
+# user_id: who is logged in, used to read and save their notes
+app_server <- function(input, output, session, user_id) {
   # Lots that match the filters
   filtered_lots <- eventReactive(input$update, {
     boe_text <- str_trim(input$boe_ref)  # spaces around what was typed removed
@@ -339,8 +346,24 @@ server <- function(input, output, session) {
   # Reaction is triggered even when lots_rows_selected is NULL
   # So when we deselect, the red markers are cleared, cuz clearGroup("selected") is executed.
   ignoreNULL = FALSE
-  )  
-  
+  )
+
+}
+
+server <- function(input, output, session) {
+  # Login: checks what was typed with check_user (R/auth.R)
+  # Correct: shinymanager reloads the page with the app, and res_auth stores the user_info key, e.g. res_auth$user_id.
+  #          user_id is what's used to read and save the notes of the person logged in
+  # Wrong: the login screen stays, with an error message. The app isn't shown and res_auth stays empty.
+  #        Wrong password and unknown name give the same message (check_user returns result = FALSE for both)
+  res_auth <- secure_server(check_credentials = check_user)
+
+  # The app's server code only starts once someone has logged in, so nothing of it runs on the login page.
+  # Before login res_auth$user_id is NULL, which observeEvent ignores. 
+  # once = TRUE: starts the app only one time
+  observeEvent(res_auth$user_id, {
+    app_server(input, output, session, user_id = res_auth$user_id)
+  }, once = TRUE)
 }
 
 shinyApp(ui, server)
