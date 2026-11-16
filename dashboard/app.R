@@ -395,6 +395,31 @@ app_server <- function(input, output, session, user_id) {
   # Same as above: also runs when the row is deselected, to empty the box
   ignoreNULL = FALSE
   )
+  
+  ####################
+  ####################
+  # Saving lot note: clicking Guardar saves whatever is typed in the note input into db its note
+  ####################
+  ####################
+  
+  # "Guardar": saves the box's note on the selected lot. Empty 
+  # box: deletes it (see save_user_note in R/db)
+  # The table isn't redrawn, so the row stays selected
+  observeEvent(input$save_note, {
+    row <- input$lots_rows_selected
+    lot <- filtered_lots()[row, ]
+    
+    con <- connect_subastas_db()
+    on.exit(dbDisconnect(con)) # closes the connection however this code ends
+    save_user_note(con, user_id, lot$boe_ref, lot$lot_number, input$note)
+    
+    # Short message in the corner
+    showNotification(
+      if (str_trim(input$note) == "") "Nota borrada" else "Nota guardada",
+      type = "message"
+    )
+  })
+  
 }
 
 server <- function(input, output, session) {
