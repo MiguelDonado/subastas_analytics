@@ -27,7 +27,10 @@ CREATE TABLE IF NOT EXISTS app.lot_reviews (
     user_id     BIGINT       NOT NULL REFERENCES app.users (user_id) ON DELETE CASCADE,
     boe_ref     VARCHAR(30)  NOT NULL,
     lot_number  INTEGER      NOT NULL,
-    notes       TEXT         NOT NULL,                           -- a row only exists if the note has text: clearing it deletes the row
+    notes       TEXT,                                                         -- NULL: no note 
+    status      VARCHAR(20)  CHECK (status IN ('interested', 'discarded')),   -- NULL: not reviewed
     updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    PRIMARY KEY (user_id, boe_ref, lot_number)  -- composite key, no surrogate id: no other table points to this one (more in docs/11.reviews.md, "One row per user and lot")
+    PRIMARY KEY (user_id, boe_ref, lot_number),  -- composite key, no surrogate id: no other table points to this one (more in docs/11.reviews.md, "One row per user and lot")
+    -- a row only exists if it has a note or a status
+    CONSTRAINT lot_reviews_not_empty CHECK (notes IS NOT NULL OR status IS NOT NULL)
 );
