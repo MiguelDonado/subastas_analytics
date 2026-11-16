@@ -22,28 +22,37 @@ read_lot_references <- function(con) {
   dbGetQuery(con, "SELECT lot_id, catastral_reference, latitude, longitude, use, class, surface, qualification FROM gold.app_lot_references WHERE is_latest")
 }
 
-read_user_notes <- function(con, user_id) {
+# Notes and statuses of one user: one row per lot that has a note or a status
+read_user_reviews <- function(con, user_id) {
   dbGetQuery(
-    con,
-    "SELECT boe_ref, lot_number, notes FROM app.lot_reviews WHERE user_id = $1",
+    con, 
+    "SELECT boe_ref, lot_number, notes, status FROM app.lot_reviews WHERE user_id = $1",
     params = list(user_id)
   )
 }
 
-# Save a user's note on a lot. An empty note deletes the row, so a row only exists if the note has text
-save_user_note <- function(con, user_id, boe_ref, lot_number, notes){
-  if (str_trim(notes) == ""){    # notes that are only spaces count as empty
-    dbExecute(con, 
+# Save a user's note and status on a lot. 
+# - notes: box's text
+# - status: 'interested', 'discarded' or '' (not reviewed)
+# Several points:
+# 1. Empty is saved as NULL
+# 2. Both notes and status empty -> Row is deleted
+# 3. Returns how many rows it changed (from dbExecute): 0 if it deleted a row that didn't exist
+save_user_review <- function(con, user_id, boe_ref, lot_number, notes, status){
+  if (str_trim(notes) == "") notes <- NA_character_
+  if (status == "") status <- NA_character_
+  
+  if (is.na(notes) && is.na(status)) {
+    dbExecute(con,
               "DELETE FROM app.lot_reviews WHERE user_id = $1 AND boe_ref = $2 AND lot_number = $3",
               params = list(user_id, boe_ref, lot_number))
   } else {
     dbExecute(con, 
-              "INSERT INTO app.lot_reviews (user_id, boe_ref, lot_number, notes)
-              VALUES ($1, $2, $3, $4)
-              ON CONFLICT (user_id, boe_ref, lot_number)
-              DO UPDATE SET notes = EXCLUDED.notes, updated_at = now()",   # EXCLUDED.notes: note that was just sent
-            params = list(user_id, boe_ref, lot_number, notes)
-              )
+          "INSERT INTO app.lot_reviews (user_id, boe_ref, lot_number, notes, status)
+          VALUES ($1, $2, $3, $4, $5)
+          ON CONFLICT (user_id, boe_ref, lot_number)
+          DO UPDATE SET notes = EXCLUDED.notes, status = EXCLUDED.status, updated_at = now()",   # EXCLUDED.notes: note that was just sent
+        params = list(user_id, boe_ref, lot_number, notes, status))
   }
 }
 
