@@ -1,3 +1,4 @@
+
 library(shiny)
 library(leaflet)
 library(bslib)
@@ -9,27 +10,31 @@ library(shinymanager)
 
 NOTE_MAX_CHARS <- 500
 
-# Lots
-con <- connect_subastas_db()
-lots <- read_lots(con) |>
-  mutate(
-    municipio = str_to_title(municipio)
-  )
-references <- read_lot_references(con) |>
-  mutate(
-    # Text of each marker's popup: the parcel's own data (the lot's is in the table)
-    popup = paste0(
-      "Ref. Cat.: <b>", catastral_reference, "</b><br>",
-      "Uso: ", use, "<br>",
-      "Clase: ", class, "<br>",
-      "Superficie parcela: ", formatC(surface, format = "f", digits = 0, big.mark = ".", decimal.mark = ","), " m²<br>",
-      "Cultivo: ", coalesce(qualification, "-"), "<br>",
-      # Google's official link format, so it won't change
-      '<a href="https://www.google.com/maps/search/?api=1&query=', latitude, ",", longitude,
-      '" target="_blank">Abrir en Google Maps</a>'
+# Lots and their catastral references, read on every login so each visitor gets the current data
+read_app_data <- function(){
+  # Lots
+  con <- connect_subastas_db()
+  on.exit(dbDisconnect(con)) # closes the connection however this function ends
+  lots <- read_lots(con) |>
+    mutate(
+      municipio = str_to_title(municipio)
     )
-  )
-dbDisconnect(con)
+  references <- read_lot_references(con) |>
+    mutate(
+      # Text of each marker's popup: the parcel's own data (the lot's is in the table)
+      popup = paste0(
+        "Ref. Cat.: <b>", catastral_reference, "</b><br>",
+        "Uso: ", use, "<br>",
+        "Clase: ", class, "<br>",
+        "Superficie parcela: ", formatC(surface, format = "f", digits = 0, big.mark = ".", decimal.mark = ","), " m²<br>",
+        "Cultivo: ", coalesce(qualification, "-"), "<br>",
+        # Google's official link format, so it won't change
+        '<a href="https://www.google.com/maps/search/?api=1&query=', latitude, ",", longitude,
+        '" target="_blank">Abrir en Google Maps</a>'
+      )
+    )
+  list(lots = lots, references = references)
+}
 
 # Data shown in the table: used to draw it, and to update it after saving a note
 table_data <- function(df) {
@@ -73,28 +78,30 @@ ui <- page_sidebar(
   padding = "0.25rem",  # less space around the map and the table
   gap = "0.25rem",      # less space between the map and the table
   # Filters: an empty filter lets every lot through
+  # Provincia, Municipio and Clase start with no options: the lots are read in the server,
+  # once someone logs in, which then fills them
   sidebar = sidebar(
     gap = "0.5rem",
     padding = "0.75rem",
     open = "always",
     selectizeInput(
-      "province", 
-      "Provincia", 
-      sort(unique(lots$province)), 
+      "province",
+      "Provincia",
+      choices = NULL,
       multiple = TRUE,
       options = list(placeholder = "Todas", plugins = list("remove_button"))
     ),
     selectizeInput(
       "municipio",
       "Municipio",
-      sort(unique(lots$municipio)),
+      choices = NULL,
       multiple = TRUE,
       options = list(placeholder = "Todos", plugins = list("remove_button"))
     ),
     selectizeInput(
       "class",
       "Clase",
-      sort(unique(lots$class)),
+      choices = NULL,
       multiple = TRUE,
       options = list(placeholder = "Todas", plugins = list("remove_button"))
     ),
@@ -145,6 +152,17 @@ ui <- secure_app(ui)
 # Only started after a correct login (see server at the end of the file)
 # user_id: who is logged in, used to read and save their notes
 app_server <- function(input, output, session, user_id) {
+  # Lots read for this visitor, so they're always the current ones in the database.
+  # The rest of the server uses these lots and references
+  data <- read_app_data()
+  lots <- data$lots
+  references <- data$references
+
+  # Options of the Provincia and Clase filters, from the lots just read.
+  # Municipio is filled by the observeEvent on input$province below, which also runs at startup
+  updateSelectizeInput(session, "province", choices = sort(unique(lots$province)))
+  updateSelectizeInput(session, "class",    choices = sort(unique(lots$class)))
+
   # Lots that match the filters
   filtered_lots <- eventReactive(input$update, {
     # The user's notes and statuses are read on every search, so they always match what's saved
