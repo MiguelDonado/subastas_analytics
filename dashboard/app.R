@@ -29,6 +29,31 @@ references <- read_lot_references(con) |>
   )
 dbDisconnect(con)
 
+# Data shown in the table: used to draw it, and to update it after saving a note
+table_data <- function(df) {
+  df |> 
+    mutate(
+      qualification = coalesce(qualification, "-"),
+      announcement_url = paste0('<a href="', announcement_url, '" target="_blank">', boe_ref, '</a>'),
+      notes = htmltools::htmlEscape(str_trunc(coalesce(notes, ""),40))
+    ) |>
+    select(
+      offer_deadline,
+      province,
+      municipio,
+      starting_price,
+      total_surface,
+      price_per_m2,
+      class,
+      use,
+      qualification,
+      reference_count,
+      lot_number,
+      announcement_url,
+      notes
+    )
+}
+  
 ui <- page_sidebar(
   disconnectMessage(
     text = "Se ha perdido la conexión con el servidor.",
@@ -156,25 +181,7 @@ app_server <- function(input, output, session, user_id) {
   ####################
   
   output$lots <- renderDT(
-    filtered_lots() |>
-      mutate(
-        qualification = coalesce(qualification, "-"),
-        announcement_url = paste0('<a href="', announcement_url, '" target="_blank">', boe_ref, '</a>')
-      ) |>
-      select(
-        offer_deadline,
-        province,
-        municipio,
-        starting_price,
-        total_surface,
-        price_per_m2,
-        class,
-        use,
-        qualification,
-        reference_count,
-        lot_number,
-        announcement_url
-      ) |>
+    table_data(filtered_lots()) |>
       datatable(
         colnames = c(
         "Plazo ofertas"         = "offer_deadline",
@@ -188,7 +195,8 @@ app_server <- function(input, output, session, user_id) {
         "Cultivo"               = "qualification",
         "Inmuebles"             = "reference_count",
         "Nº lote"               = "lot_number",
-        "Anuncio"               = "announcement_url"
+        "Anuncio"               = "announcement_url",
+        "Nota"                  = "notes"
       ),
       escape = FALSE, # show the link as HTML
       selection = "single",  # Select only one row at a time
@@ -418,8 +426,19 @@ app_server <- function(input, output, session, user_id) {
       if (str_trim(input$note) == "") "Nota borrada" else "Nota guardada",
       type = "message"
     )
+    
+    # The table shows the new note without being redrawn: 
+    # same page, same row selected, map unchanged
+    # filtered_lots() still has the notes from the last
+    # "Buscar", so they're read again
+    new_data <- filtered_lots() |> 
+      select(-notes) |> 
+      left_join(read_user_notes(con, user_id), by = c("boe_ref", "lot_number")) |> 
+      table_data()
+    
+    dataTableProxy("lots") |> 
+      replaceData(new_data, resetPaging = FALSE, clearSelection = "none")
   })
-  
 }
 
 server <- function(input, output, session) {
