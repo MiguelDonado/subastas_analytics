@@ -35,7 +35,13 @@ table_data <- function(df) {
     mutate(
       qualification = coalesce(qualification, "-"),
       announcement_url = paste0('<a href="', announcement_url, '" target="_blank">', boe_ref, '</a>'),
-      notes = htmltools::htmlEscape(str_trunc(coalesce(notes, ""),40))
+      notes = htmltools::htmlEscape(str_trunc(coalesce(notes, ""),40)),
+      # In spanish for the table. Not reviewed (NULL): empty cell
+      status = case_when(
+        status == "interested" ~ "Interesado",
+        status == "discarded"  ~ "Descartado",
+        .default = ""
+      )
     ) |>
     select(
       offer_deadline,
@@ -50,6 +56,7 @@ table_data <- function(df) {
       reference_count,
       lot_number,
       announcement_url,
+      status,
       notes
     )
 }
@@ -104,6 +111,16 @@ ui <- page_sidebar(
     actionButton("update", "Buscar"), 
     card(
       class = "bg-warning-subtle border-warning",
+      radioButtons(
+        "status", "Estado",
+        # The value is what's saved into db: "" means not reviewed, saved 
+        # as NULL by save_user_review
+        choices = c(
+          "Sin revisar" = "",
+          "Interesado"  = "interested",
+          "Descartado"  = "discarded"
+        )
+      ),
       textAreaInput("note", "Nota del lote", rows = 4, resize = "vertical"),
       # disabled: cuz there is no lot to save to until a row is selected
       actionButton("save_note", "Guardar", disabled = TRUE)
@@ -126,14 +143,14 @@ ui <- secure_app(ui)
 app_server <- function(input, output, session, user_id) {
   # Lots that match the filters
   filtered_lots <- eventReactive(input$update, {
-    # The user's notes are read on every search, so they always match what's saved
+    # The user's notes and statuses are read on every search, so they always match what's saved
     con <- connect_subastas_db()
     on.exit(dbDisconnect(con))  # closes the connection however this code ends
-    notes <- read_user_notes(con, user_id)
+    reviews <- read_user_reviews(con, user_id)
 
     boe_text <- str_trim(input$boe_ref)  # spaces around what was typed removed
     lots |>
-      left_join(notes, by = c("boe_ref", "lot_number")) |>  # notes is NA when the lot has none
+      left_join(reviews, by = c("boe_ref", "lot_number")) |>  
       filter(
         # First part of each line checks whether you left that filter empty
         # If you did the line is true for every lot, so it doesnt remove anything
@@ -196,6 +213,7 @@ app_server <- function(input, output, session, user_id) {
         "Inmuebles"             = "reference_count",
         "Nº lote"               = "lot_number",
         "Anuncio"               = "announcement_url",
+        "Estado"                = "status",
         "Nota"                  = "notes"
       ),
       escape = FALSE, # show the link as HTML
@@ -371,18 +389,19 @@ app_server <- function(input, output, session, user_id) {
 
   ####################
   ####################
-  # Lot note: selecting a row fills the box with its note
+  # Lot note and status: selecting a row fills the box and the status with its own
   ####################
   ####################
 
-  # The note is read from the database, so the box always shows the last saved note.
+  # The note and status are read from the database, so they're always the last saved ones.
   # lots_rows_selected: holds the selected row's number (original table, not sorted)
   observeEvent(input$lots_rows_selected, {
     row <- input$lots_rows_selected
 
-    # No row selected: empty box, save button disabled
+    # No row selected: empty box, "Sin revisar", save button disabled
     if (is.null(row)) {
       updateTextAreaInput(session, "note", value = "")
+      updateRadioButtons(session, "status", selected = "")
       updateActionButton(session, "save_note", disabled = TRUE)
       return()
     }
@@ -390,14 +409,15 @@ app_server <- function(input, output, session, user_id) {
     lot <- filtered_lots()[row, ]
     con <- connect_subastas_db()
     on.exit(dbDisconnect(con))  # closes the connection however this code ends
-    note <- read_user_notes(con, user_id) |>
-      # The selected lot's row: 0 rows if it has no note
-      filter(boe_ref == lot$boe_ref, lot_number == lot$lot_number) |>
-      pull(notes)
+    # If there is no review, returns a df with 0 rows (its columns are still there
+    # but they are empty)
+    review <- read_user_reviews(con, user_id) |>
+      # The selected lot's row: 0 rows if it has no note and no status
+      filter(boe_ref == lot$boe_ref, lot_number == lot$lot_number)
 
-    # note: the lot's note, or empty vector (character(0)) if it has none.
-    # Then "" is sent explicitly, otherwise the box could keep the previous lot's note
-    updateTextAreaInput(session, "note", value = if (length(note) == 1) note else "")
+    # coalesce: Turns NA into ""
+    updateTextAreaInput(session, "note", value = coalesce(review$notes[1], ""))
+    updateRadioButtons(session, "status", selected = coalesce(review$status[1],""))
     updateActionButton(session, "save_note", disabled = FALSE)
   },
   # Same as above: also runs when the row is deselected, to empty the box
@@ -406,12 +426,12 @@ app_server <- function(input, output, session, user_id) {
   
   ####################
   ####################
-  # Saving lot note: clicking Guardar saves whatever is typed in the note input into db its note
+  # Saving lot note and status: clicking Guardar saves both into the db
   ####################
   ####################
-  
-  # "Guardar": saves the box's note on the selected lot. Empty 
-  # box: deletes it (see save_user_note in R/db)
+
+  # "Guardar": saves the box's note and the chosen status on the selected lot.
+  # Empty note and no status: deletes the row (see save_user_review in R/db.R)
   # The table isn't redrawn, so the row stays selected
   observeEvent(input$save_note, {
     row <- input$lots_rows_selected
@@ -419,21 +439,23 @@ app_server <- function(input, output, session, user_id) {
     
     con <- connect_subastas_db()
     on.exit(dbDisconnect(con)) # closes the connection however this code ends
-    save_user_note(con, user_id, lot$boe_ref, lot$lot_number, input$note)
+    # It returns how many rows it changed
+    changed <- save_user_review(con, user_id, lot$boe_ref, lot$lot_number, input$note, input$status)
     
-    # Short message in the corner
-    showNotification(
-      if (str_trim(input$note) == "") "Nota borrada" else "Nota guardada",
-      type = "message"
-    )
+    if (str_trim(input$note) == "" && input$status == ""){
+      # Only display "Borrado" message if there was something before 
+      if (changed > 0) showNotification("Borrado", type = "message")
+    } else {
+        showNotification("Guardado", type = "message")
+    }
     
-    # The table shows the new note without being redrawn: 
+    # The table shows the new note and status without being redrawn:
     # same page, same row selected, map unchanged
-    # filtered_lots() still has the notes from the last
+    # filtered_lots() still has the notes and statuses from the last
     # "Buscar", so they're read again
     new_data <- filtered_lots() |> 
-      select(-notes) |> 
-      left_join(read_user_notes(con, user_id), by = c("boe_ref", "lot_number")) |> 
+      select(-notes, -status) |> 
+      left_join(read_user_reviews(con, user_id), by = c("boe_ref", "lot_number")) |> 
       table_data()
     
     dataTableProxy("lots") |> 
