@@ -7,6 +7,8 @@ library(stringr)
 library(shinydisconnect)
 library(shinymanager)
 
+NOTE_MAX_CHARS <- 500
+
 # Lots
 con <- connect_subastas_db()
 lots <- read_lots(con) |>
@@ -121,7 +123,9 @@ ui <- page_sidebar(
           "Descartado"  = "discarded"
         )
       ),
-      textAreaInput("note", "Nota del lote", rows = 2, resize = "vertical"),
+      # maxlength: the browser stops typing at NOTE_MAX_CHARS characters (the server and the database also check it)
+      textAreaInput("note", "Nota del lote", rows = 2, resize = "vertical") |>
+        tagAppendAttributes(maxlength = NOTE_MAX_CHARS, .cssSelector = "textarea"),
       # disabled: cuz there is no lot to save to until a row is selected
       actionButton("save_note", "Guardar", disabled = TRUE)
     )
@@ -436,6 +440,11 @@ app_server <- function(input, output, session, user_id) {
   observeEvent(input$save_note, {
     row <- input$lots_rows_selected
     lot <- filtered_lots()[row, ]
+    
+    if (nchar(input$note) > NOTE_MAX_CHARS) {
+      showNotification(paste0("La nota no puede tener más de ", NOTE_MAX_CHARS, " caracteres"), type = "error")
+      return()
+    }
     
     con <- connect_subastas_db()
     on.exit(dbDisconnect(con)) # closes the connection however this code ends
