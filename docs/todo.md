@@ -10,3 +10,7 @@ leyenda mapa topografico
 
 
 maybe in the future, do better, the reviews stuff. Create an OLTP for this feature, and then combine it with the OLAP.
+
+API anthropic expires in 7 days (22/11/2026)
+
+simplificar contraseña usuario shinymanager miguelangel 
