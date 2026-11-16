@@ -37,4 +37,4 @@ Set in `.astro/config.yaml`, because `cgm-analytics` already uses 8080, 5432 and
 | Airflow UI | 8081 |
 | Airflow metadata Postgres | 5434 |
 
-`subastas-db` is exposed on `localhost:5435`, set in `docker-compose.override.yml`. This mapping is for tools on the laptop, such as `dbeaver`.
+The database is on Neon, so it has no local port. The local `subastas-db` container used before is commented out in `docker-compose.override.yml`.

@@ -1,4 +1,4 @@
-# Database access for the dashboard: connection to subastas-db and queries.
+# Database access for the dashboard: connection to the database (Neon) and queries.
 # Connection settings come from environment variables (dashboard/.Renviron)
 library(DBI)
 
