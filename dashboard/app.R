@@ -114,10 +114,9 @@ ui <- page_sidebar(
       class = "bg-warning-subtle border-warning",
       radioButtons(
         "status", "Estado",
-        # The value is what's saved into db: "" means not reviewed, saved 
-        # as NULL by save_user_review
+        # "none" means not reviewed: save_user_review saves it as NULL
         choices = c(
-          "Sin revisar" = "",
+          "Sin revisar" = "none",
           "Interesado"  = "interested",
           "Descartado"  = "discarded"
         )
@@ -402,7 +401,7 @@ app_server <- function(input, output, session, user_id) {
     # No row selected: empty box, "Sin revisar", save button disabled
     if (is.null(row)) {
       updateTextAreaInput(session, "note", value = "")
-      updateRadioButtons(session, "status", selected = "")
+      updateRadioButtons(session, "status", selected = "none")
       updateActionButton(session, "save_note", disabled = TRUE)
       return()
     }
@@ -416,9 +415,9 @@ app_server <- function(input, output, session, user_id) {
       # The selected lot's row: 0 rows if it has no note and no status
       filter(boe_ref == lot$boe_ref, lot_number == lot$lot_number)
 
-    # coalesce: Turns NA into ""
+    # coalesce: Turns NA into "" or "none"
     updateTextAreaInput(session, "note", value = coalesce(review$notes[1], ""))
-    updateRadioButtons(session, "status", selected = coalesce(review$status[1],""))
+    updateRadioButtons(session, "status", selected = coalesce(review$status[1],"none"))
     updateActionButton(session, "save_note", disabled = FALSE)
   },
   # Same as above: also runs when the row is deselected, to empty the box
@@ -443,7 +442,7 @@ app_server <- function(input, output, session, user_id) {
     # It returns how many rows it changed
     changed <- save_user_review(con, user_id, lot$boe_ref, lot$lot_number, input$note, input$status)
     
-    if (str_trim(input$note) == "" && input$status == ""){
+    if (str_trim(input$note) == "" && input$status == "none"){
       # Only display "Borrado" message if there was something before 
       if (changed > 0) showNotification("Borrado", type = "message")
     } else {
