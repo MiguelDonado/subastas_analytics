@@ -33,14 +33,14 @@ read_user_reviews <- function(con, user_id) {
 
 # Save a user's note and status on a lot. 
 # - notes: box's text
-# - status: 'interested', 'discarded' or '' (not reviewed)
+# - status: 'interested', 'discarded' or 'none' (not reviewed)
 # Several points:
 # 1. Empty is saved as NULL
 # 2. Both notes and status empty -> Row is deleted
 # 3. Returns how many rows it changed (from dbExecute): 0 if it deleted a row that didn't exist
 save_user_review <- function(con, user_id, boe_ref, lot_number, notes, status){
   if (str_trim(notes) == "") notes <- NA_character_
-  if (status == "") status <- NA_character_
+  if (status == "none") status <- NA_character_
   
   if (is.na(notes) && is.na(status)) {
     dbExecute(con,
