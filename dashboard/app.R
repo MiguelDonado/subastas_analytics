@@ -72,7 +72,8 @@ ui <- page_sidebar(
   gap = "0.25rem",      # less space between the map and the table
   # Filters: an empty filter lets every lot through
   sidebar = sidebar(
-    gap = "0.75rem",
+    gap = "0.5rem",
+    padding = "0.75rem",
     open = "always",
     selectizeInput(
       "province", 
@@ -95,18 +96,18 @@ ui <- page_sidebar(
       multiple = TRUE,
       options = list(placeholder = "Todas", plugins = list("remove_button"))
     ),
+    selectizeInput(
+      "status_filter",
+      "Estado",
+      # a selectize can't have an empty value '' as an option. So we use 'none'
+      choices = c("Sin revisar" = "none", "Interesado" = "interested", "Descartado" = "discarded"),
+      multiple = TRUE,
+      options = list(placeholder = "Todos", plugins = list("remove_button"))
+    ),
     numericInput("price_max", "Precio máximo (€)", NA),
     numericInput("surface_min", "Superficie mínima (m²)", NA),
     # To find one announcement: part of the BOE reference is enough, e.g. "12345"
     textInput("boe_ref", "Anuncio (BOE)", placeholder = "BOE-B-2026-12345"),
-    # Weekly check: only the lots that reached the app since that day (your last visit)
-    # value = NA leaves it empty (NULL would put today), but Shiny warns about NA, so it's silenced
-    suppressWarnings(
-      dateInput("new_since", "Nuevos desde", value = NA,
-                format = "dd/mm/yyyy", language = "es", weekstart = 1)
-    ) |> 
-    # Clear button at the bottom of the calendar ("Borrar" in Spanish), to empty the box
-    tagAppendAttributes(`data-date-clear-btn` = "true", .cssSelector = "input"),
     input_switch("only_upcoming", "Solo subastas activas", value=TRUE),
     actionButton("update", "Buscar"), 
     card(
@@ -121,7 +122,7 @@ ui <- page_sidebar(
           "Descartado"  = "discarded"
         )
       ),
-      textAreaInput("note", "Nota del lote", rows = 4, resize = "vertical"),
+      textAreaInput("note", "Nota del lote", rows = 2, resize = "vertical"),
       # disabled: cuz there is no lot to save to until a row is selected
       actionButton("save_note", "Guardar", disabled = TRUE)
     )
@@ -159,11 +160,11 @@ app_server <- function(input, output, session, user_id) {
         is.null(input$class)     | class %in% input$class,
         is.na(input$price_max)   | starting_price <= input$price_max,
         is.na(input$surface_min) | total_surface >= input$surface_min,
+        # Not reviewed is NULL in the database (NA here), so coalesce turns it into "none" to compare with the options
+        is.null(input$status_filter) | coalesce(status, "none") %in% input$status_filter,
         # Lots whose boe_ref contains what was typed (plain text, any case)
         # if/else, not |: | would also run str_detect on an empty box, which warns
         if (boe_text == "") TRUE else str_detect(boe_ref, fixed(boe_text, ignore_case = TRUE)),
-        # Empty box (isTruthy is FALSE) -> TRUE for every lot, so nothing is removed
-        if (isTruthy(input$new_since)) ingested_date >= input$new_since else TRUE,
         # If switch is off -> First part is TRUE, so it doesnt apply any filter
         # filter(TRUE): Returns all rows
         !input$only_upcoming     | offer_deadline >= Sys.Date()
