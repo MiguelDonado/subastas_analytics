@@ -1,0 +1,13 @@
+# Template of .Renviron: copy it to .Renviron and fill in the values. .Renviron is out of git.
+# R loads .Renviron by itself on startup, so restart R after changing it.
+# On Posit Connect Cloud these same variables are set in the app's settings.
+
+# Database (Neon), with the app's user. The host is what's between @ and / in Neon's connection string
+SUBASTAS_DB_HOST=<neon-host>
+SUBASTAS_DB_PORT=5432
+SUBASTAS_DB_NAME=subastas
+SUBASTAS_DB_USER=subastas_app
+SUBASTAS_DB_PASSWORD=<subastas_app-password>
+
+# Only connect if the connection is encrypted
+PGSSLMODE=require

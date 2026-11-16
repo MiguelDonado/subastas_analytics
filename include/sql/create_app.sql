@@ -32,5 +32,7 @@ CREATE TABLE IF NOT EXISTS app.lot_reviews (
     updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
     PRIMARY KEY (user_id, boe_ref, lot_number),  -- composite key, no surrogate id: no other table points to this one (more in docs/11.reviews.md, "One row per user and lot")
     -- a row only exists if it has a note or a status
-    CONSTRAINT lot_reviews_not_empty CHECK (notes IS NOT NULL OR status IS NOT NULL)
+    CONSTRAINT lot_reviews_not_empty CHECK (notes IS NOT NULL OR status IS NOT NULL),
+    -- notes are limited, so nobody can fill the database with huge notes
+    CONSTRAINT lot_reviews_notes_length CHECK (char_length(notes) <= 500)
 );
