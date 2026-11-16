@@ -401,7 +401,7 @@ app_server <- function(input, output, session, user_id) {
     # No row selected: empty box, "Sin revisar", save button disabled
     if (is.null(row)) {
       updateTextAreaInput(session, "note", value = "")
-      updateRadionButtons(session, "status", selected = "")
+      updateRadioButtons(session, "status", selected = "")
       updateActionButton(session, "save_note", disabled = TRUE)
       return()
     }
@@ -413,7 +413,7 @@ app_server <- function(input, output, session, user_id) {
     # but they are empty)
     review <- read_user_reviews(con, user_id) |>
       # The selected lot's row: 0 rows if it has no note and no status
-      filter(boe_ref == lot$boe_ref, lot_number == lot$lot_number) |>
+      filter(boe_ref == lot$boe_ref, lot_number == lot$lot_number)
 
     # coalesce: Turns NA into ""
     updateTextAreaInput(session, "note", value = coalesce(review$notes[1], ""))
