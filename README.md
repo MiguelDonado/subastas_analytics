@@ -1,3 +1,8 @@
+## Live app
+https://01a1e61c-7dc8-69e3-b535-b360f28ed430.share.connect.posit.cloud/
+
+To try it, log in with the test user: `test` / `test`. Its notes are shared with everyone who uses it.
+
 ## Extraction source
 **BOE Open Data API**
 **GoolZoom API**

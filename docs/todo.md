@@ -1,3 +1,5 @@
-test e2e with kaneaiz or shinytest2
-
-in the future use an open source llm, to not spend any money, and so that it is free
+- Nice to have: e2e tests, and switching to an open-source LLM to cut costs.
+- Optimize app so that it works faster in connect.posit.cloud
+- write readme
+- record videos
+- rotate the neondb_owner password
