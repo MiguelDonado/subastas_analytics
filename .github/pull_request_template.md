@@ -1,0 +1,2 @@
+## Before merging
+- [ ] If the dashboard's packages changed: in `dashboard/`, run `renv::snapshot()` and `rsconnect::writeManifest(appFiles = c("app.R", "R/db.R", "R/auth.R"))`, and commit `renv.lock` and `manifest.json`. Otherwise Posit fails to install them.
