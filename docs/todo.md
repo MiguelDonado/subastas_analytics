@@ -1,6 +1,5 @@
 - Nice to have: e2e tests, and switching to an open-source LLM to cut costs.
-- Optimize app so that it works faster in connect.posit.cloud
-- write readme
+- Optimize app so that it works faster in connect.posit.cloud shiny
 - record videos
 - Leer este informe sobre los bosques de Galicia. /home/miguel/6.Projects/subastas_analytics/assets/reports/Publicación_IFN4_Galicia.pdf
 - Anotar todo lo que vi con claude sobre el data analysis y sitios en los que podia obtener precios de referencia con los que comparar., ver assets/reports y anotar esto sobre el valor de referencia - It starts from an average value per crop or land-use group (módulo de valor medio). That covers all rustic uses, not only farmland, so it should include forest land too.
