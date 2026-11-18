@@ -58,12 +58,12 @@ with everyone who uses it.
     - [1. Data engineering](#1-data-engineering)
     - [2. Web application](#2-web-application)
     - [3. Analytics: how I use it to decide](#3-analytics-how-i-use-it-to-decide)
+    - [Database: OLAP and OLTP](#database-olap-and-oltp)
   - [Deployment](#deployment)
   - [CI/CD](#cicd)
   - [Getting Started](#getting-started)
     - [Prerequisites](#prerequisites)
     - [Setup](#setup)
-  - [Built with Claude](#built-with-claude)
   - [Future improvements](#future-improvements)
   - [License](#license)
 
@@ -159,13 +159,39 @@ An Airflow DAG runs every Monday and follows a medallion architecture:
 
 | Layer | What happens |
 |---|---|
-| **Bronze** | Downloads the BOE summaries of the past 7 days, keeps the Hacienda auction announcements, and stores their raw text |
-| **Silver** | For each new announcement, Claude extracts the lots, starting prices and catastral references. Goolzoom adds the Catastro data of each reference: coordinates, use, class, surface and crop. Stored in 3NF, and announcements that fail go to their own table for review |
+| **Bronze** | Downloads the BOE summaries of the past 7 days. Titles that pass the regexes are possible auctions, and Claude confirms which ones really are. Their raw text is stored |
+| **Silver** | Takes every bronze announcement that isn't in silver yet. Claude reads the raw text and extracts the lots, starting prices and catastral references into a fixed schema. Goolzoom adds the Catastro data of each reference: coordinates, use, class, surface and crop. Stored in 3NF, and announcements that fail go to their own table for review, so they aren't sent to Claude again |
 | **Gold** | Rebuilt from silver on every run as a star schema, plus the view the app reads |
+
+Bronze only holds the BOE announcements, in a single table, because the BOE is
+the only source. Claude and Goolzoom are called with data already in bronze, so
+their results are enrichment and go straight to silver
+([why](docs/2.data_modelling.md#only-the-boes-content-is-stored-in-bronze)).
 
 When an auction has a second or third round, it's a new announcement in the
 BOE, so it's loaded like any other. The rounds of the same property are linked
 through their catastral references.
+
+Alerts follow the rule "no news is bad news": every successful run pings
+[healthchecks.io](https://healthchecks.io), and if the ping doesn't arrive, it
+emails me. A failed task also pings it right away. So it emails me when:
+
+- A task still fails after its retries, or an announcement fails in silver. The email is sent right away.
+- No auction titles show up in the BOE for 2 weeks in a row, which suggests the regexes no longer match. The email is sent right away.
+- The pipeline doesn't run at all, for example because the laptop was off. The email comes on Tuesday morning.
+
+The email only says that something went wrong. The cause is in the Airflow
+task logs:
+
+- **Bronze:** how many titles passed the regexes and how many Claude confirmed.
+  Each title Claude rejected gets a `NOT AN AUCTION` line. A title that mentions
+  Hacienda and subasta but doesn't pass the regexes gets a `NEAR MISS` line.
+- **Silver:** every announcement ends with one line that includes its BOE
+  reference: `LOADED`, `FAILED` (a problem with the announcement, with the
+  reason) or `STOPPED` (Claude or Goolzoom failed). Each lot or catastral
+  reference that was left out gets a `REJECTED` line that says why.
+
+Details in [`docs/1.scheduling_monitoring.md`](docs/1.scheduling_monitoring.md).
 
 ### 2. Web application
 
@@ -174,8 +200,12 @@ use, maximum price, minimum surface, status). On the right, a map with the
 parcels on top and a table with one row per lot below. Clicking a row zooms the
 map to its parcels, and clicking a parcel selects its row in the table.
 
+Each parcel is a marker on the map. Its popup shows the main data of that
+parcel: catastral reference, use, class, surface and crop, plus a link to open
+it in Google Maps.
+
 Each user can mark a lot as **Interesado** or **Descartado** and write a note
-on it, for example "visited, the house needs a new roof".
+on it, for example "visited, it is very steep".
 
 ### 3. Analytics: how I use it to decide
 
@@ -192,7 +222,45 @@ me the data in the right shape to do it quickly:
 6. Only for the few marked as Interesado, read the conditions on Hacienda's
    website and decide whether to bid.
 
-What used to take me hours of jumping between websites now takes minutes.
+### Database: OLAP and OLTP
+
+The PostgreSQL database has two parts, for two kinds of data:
+
+| Part | Schemas | What it holds | Who writes it | Who reads it |
+|---|---|---|---|---|
+| **OLAP** | `bronze`, `silver`, `gold` | Auctions, lots and parcels from the BOE | The pipeline, once a week | The app, to filter and compare lots on the map and in the table |
+| **OLTP** | `app` | Users, and their notes and status on each lot | The app, one note at a time | The app, to show each user their notes |
+
+All the app's writes and reads of notes go to `app`. A note has to show up as
+soon as it's saved, and gold is only rebuilt on Mondays, so the app can't read
+the notes from gold.
+
+The notes aren't copied into bronze, silver and gold, because only the app
+reads them and nothing analyzes them. To analyze them, for example to count
+discarded lots per province, bronze would copy `app.lot_reviews` once a week
+and the notes would go through the layers like the BOE data. The app would
+still write and show the notes from `app`, and only the reports would read them
+from gold.
+
+<details>
+<summary><b>OLAP: silver data model (3NF)</b></summary>
+
+<img src="data_modeling/OLAP/2.silver/E-R.drawio.png" alt="E-R diagram of silver" width="100%">
+</details>
+
+<details>
+<summary><b>OLAP: gold data model (star schema)</b></summary>
+
+<img src="data_modeling/OLAP/3.gold/E-R.drawio.png" alt="E-R diagram of gold" width="100%">
+</details>
+
+<details>
+<summary><b>OLTP: users and notes data model</b></summary>
+
+<img src="data_modeling/OLAP/reviews/E-R_reviews.drawio.png" alt="E-R diagram of the app's users and their notes on each lot" width="100%">
+</details>
+
+More details in [`docs/2.data_modelling.md`](docs/2.data_modelling.md#oltp-and-olap).
 
 ---
 
@@ -208,8 +276,9 @@ Laptop (Airflow, weekly)  ──writes──▶  Neon (PostgreSQL)  ◀──rea
 - **[Neon](https://neon.tech)** hosts the PostgreSQL database. It has a free
   plan and goes to sleep when nothing is connected.
 - **[Posit Connect Cloud](https://connect.posit.cloud)** hosts the Shiny app. It
-  builds it from this GitHub repo, using `dashboard/manifest.json` to install
-  the exact R and package versions. The database credentials are set as
+  builds it from this GitHub repo. There's no container of ours: Posit installs
+  the exact R and package versions listed in `dashboard/manifest.json` on its
+  own servers and runs the app there. The database credentials are set as
   secrets in Connect Cloud, never in the repo.
 - **Two database users:** Airflow connects as the owner of the database, and
   the app as `subastas_app`, which can only read gold and write the notes.
@@ -222,7 +291,7 @@ Details in [`docs/4.deployment.md`](docs/4.deployment.md).
 
 | Stage | What happens | How |
 |---|---|---|
-| **Continuous Integration** | Every pull request to `main`, and every push to `main`, runs the unit and integration tests (against a throwaway Postgres) and the DAG tests | GitHub Actions, [`tests.yml`](.github/workflows/tests.yml) |
+| **Continuous Integration** | Every pull request to `main`, and every push to `main`, runs the unit tests, integration tests and the DAG tests | GitHub Actions, [`tests.yml`](.github/workflows/tests.yml) |
 | **Protected `main`** | `main` only changes through pull requests, and a pull request can only merge when both checks pass | GitHub ruleset |
 | **Continuous Deployment** | Merging into `main` republishes the live app, with no manual step | Posit Connect Cloud, watching the repo |
 
@@ -242,14 +311,15 @@ Details in [`docs/5.ci_cd.md`](docs/5.ci_cd.md) and
   Airflow locally. No Astronomer account is needed.
 - **[uv](https://docs.astral.sh/uv/)**: to install the Python dependencies and
   run the tests.
-- **R** with **renv**: only to run the app on your own machine.
+- **R** with **renv**: only to run the shiny app on your own machine.
 - **Accounts and API keys:**
   - [Anthropic](https://console.anthropic.com): Claude API key (paid per use).
-  - [Goolzoom](https://www.goolzoom.com): API key for the Catastro data.
+  - [Goolzoom](https://www.goolzoom.com): API key to add the Catastro data to
+    each catastral reference (free).
   - [Neon](https://neon.tech): the database (free plan).
   - [Healthchecks.io](https://healthchecks.io): a check for the alerts (free
     plan).
-  - [Posit Connect Cloud](https://connect.posit.cloud): only to publish the app
+  - [Posit Connect Cloud](https://connect.posit.cloud): only to publish the shiny app
     online (free plan).
 
 ### Setup
@@ -276,25 +346,29 @@ Details in [`docs/5.ci_cd.md`](docs/5.ci_cd.md) and
    astro dev start
    ```
 
-   The Airflow UI is at <http://localhost:8081> (8080 is left free for other
-   projects). The DAG starts unpaused and, because of `catchup=True`, runs once
+   The Airflow UI is at <http://localhost:8081>. The DAG starts unpaused and, because of `catchup=True`, runs once
    for every Monday since its `start_date`. Each run sends the new
    announcements to Claude, so it costs API credits.
 
-5. **Create the app's tables and user**, once, connected to Neon as the owner:
+5. **Create the app schema and the database user `subastas_app`**, once, connected to Neon with the owner database user:
 
    ```bash
    psql "<neon-connection-string>" -f include/sql/create_app.sql
    psql "<neon-connection-string>" -f include/sql/create_app_role.sql
    ```
 
-   Then set the password of `subastas_app` in the Neon console (Roles &
-   Databases → `subastas_app` → Reset password), and add users to `app.users`
-   as explained in [`docs/11.reviews.md`](docs/11.reviews.md).
+   Then set the password of the database user `subastas_app` in the Neon
+   console (Roles & Databases → `subastas_app` → Reset password).
 
-6. **Run the app.** Copy `dashboard/.Renviron.example` to `dashboard/.Renviron`
-   and fill in the Neon host and the `subastas_app` password. Then, in R, from
-   the `dashboard` folder:
+   Last, add the people who will log in to the app to `app.users`. Each one
+   gets their own notes. How to do it is in
+   [`docs/11.reviews.md`](docs/11.reviews.md).
+
+6. **Run the app locally.** Copy `dashboard/.Renviron.example` to
+   `dashboard/.Renviron` and fill in two values: the Neon host (the part
+   between `@` and `/` in the connection string) and the password of the
+   database user `subastas_app`. Then open `dashboard/dashboard.Rproj` in
+   RStudio, or start R from the `dashboard` folder, and run:
 
    ```r
    renv::restore()
@@ -314,17 +388,6 @@ uv sync
 uv run pytest                    # unit and integration tests
 astro dev pytest tests/dags      # DAG tests
 ```
-
----
-
-## Built with Claude
-
-- **Tests (`tests/`):** written with Claude. Only the unit tests
-  (`tests/unit`) were reviewed.
-- **Failure modes ([`docs/6.failure_modes.md`](docs/6.failure_modes.md)):**
-  built with the help of Claude, then carefully reviewed and modified.
-
----
 
 ## Future improvements
 
