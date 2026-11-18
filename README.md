@@ -141,7 +141,7 @@ their own user.
 | **Database** | PostgreSQL: medallion architecture, star schema |
 | **Web app** | R, Shiny, Leaflet (geospatial visualization), login with `shinymanager` |
 | **Cloud** | Neon (database), Posit Connect Cloud (app) |
-| **Testing and CI/CD** | pytest, testcontainers, GitHub Actions |
+| **Testing and CI/CD** | pytest, testcontainers, shinytest2 (end-to-end tests of the app), GitHub Actions |
 
 ---
 
@@ -178,7 +178,7 @@ emails me. A failed task also pings it right away. So it emails me when:
 
 - A task still fails after its retries, or an announcement fails in silver. The email is sent right away.
 - No auction titles show up in the BOE for 2 weeks in a row, which suggests the regexes no longer match. The email is sent right away.
-- The pipeline doesn't run at all, for example because the laptop was off. The email comes on Tuesday morning.
+- The pipeline doesn't run at all, for example because the laptop was off. The email comes on Tuesday at 10:00.
 
 The email only says that something went wrong. The cause is in the Airflow
 task logs:
@@ -257,7 +257,7 @@ from gold.
 <details>
 <summary><b>OLTP: users and notes data model</b></summary>
 
-<img src="data_modeling/OLAP/reviews/E-R_reviews.drawio.png" alt="E-R diagram of the app's users and their notes on each lot" width="100%">
+<img src="data_modeling/OLTP/E-R_reviews.drawio.png" alt="E-R diagram of the app's users and their notes on each lot" width="100%">
 </details>
 
 More details in [`docs/2.data_modelling.md`](docs/2.data_modelling.md#oltp-and-olap).
@@ -296,6 +296,11 @@ Details in [`docs/4.deployment.md`](docs/4.deployment.md).
 | **Continuous Deployment** | Merging into `main` republishes the live app, with no manual step | Posit Connect Cloud, watching the repo |
 
 The tests never call the real APIs, so CI needs no API keys and costs nothing.
+
+The app also has end-to-end tests, written with shinytest2. They open the real
+app in Chrome and use it like a person would: they search, click rows and save
+notes, and check that the table, the map and the notes react. They run only on
+my laptop, against a local copy of the database, so they aren't part of CI.
 
 Details in [`docs/5.ci_cd.md`](docs/5.ci_cd.md) and
 [`docs/7.testing.md`](docs/7.testing.md).
@@ -389,6 +394,10 @@ uv run pytest                    # unit and integration tests
 astro dev pytest tests/dags      # DAG tests
 ```
 
+The app's end-to-end tests run from R, in the `dashboard` folder, with
+`shinytest2::test_app()`. They need Docker, Google Chrome and the local database
+described in [`docs/7.testing.md`](docs/7.testing.md#app-end-to-end-e2e-tests).
+
 ## Future improvements
 
 Right now the project has no data analysis part of its own. These additions
@@ -397,17 +406,10 @@ would give it one:
 - **Compare each lot with a reference price:** the starting price against the
   Catastro's reference value (valor de referencia) of its parcels, which covers
   all rustic land, forest included.
-- **Compare with similar lots:** €/m² against lots with the same province, use
-  and crop type, once location is included too (for example distance to the
-  nearest village).
-- **Where and when:** number of lots and €/m² by province and month, to see
-  where the supply is and which areas are cheaper.
 - **Learn from my reviews:** compare the lots marked Interesado with the
   Descartado ones, and later a model that flags the lots I would probably like.
-- **Final price:** if the BOE publishes the winning bid, store it and predict
-  the final price of new lots.
 
-Other ideas: end-to-end tests, an open-source LLM to cut costs, and a faster
+Other ideas: an open-source LLM to cut costs, and a faster
 app on Posit Connect Cloud.
 
 ---

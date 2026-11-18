@@ -31,3 +31,6 @@ logs/
 *.mp4
 *.mkv
 *.pdf
+
+# Exceptions
+!assets/example_pliego_soria.pdf
