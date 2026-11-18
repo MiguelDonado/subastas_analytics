@@ -9,6 +9,19 @@ library(shinymanager)
 
 NOTE_MAX_CHARS <- 500
 
+# TRUE only when shinytest2 runs the app (it turns on shiny.testmode)
+is_testmode <- function() isTRUE(getOption("shiny.testmode"))
+
+# e2e tests: connect to the local database. Read after .Renviron, so its values replace Neon's
+if (is_testmode()) readRenviron("tests/e2e.Renviron")
+
+# Today, for the "Solo subastas activas" filter. In the e2e tests it's a fixed date,
+# so the active lots are the same on every run
+today <- function() {
+  if (is_testmode()) as.Date("2026-11-18") else Sys.Date()
+}
+
+
 # Lots and their catastral references, read on every login so each visitor gets the current data
 read_app_data <- function(){
   # Lots
@@ -144,13 +157,21 @@ ui <- page_sidebar(
   )
 )
 
-# Login screen in front of the whole app: nothing above is shown until the user logs in
-ui <- secure_app(ui)
+# Login screen in front of the whole app: nothing above is shown until the user logs in.
+# In the e2e tests there's no login screen: shinymanager reloads the page after the login,
+# and shinytest2 can't follow a reload
+if (!is_testmode()) ui <- secure_app(ui)
 
 # All the app's server code: filters, table, map, markers...
 # Only started after a correct login (see server at the end of the file)
 # user_id: who is logged in, used to read and save their notes
 app_server <- function(input, output, session, user_id) {
+  # The test can't see the app's environment variables, 
+  #because the app runs in another process. So the app exports the host:
+  # Only for the e2e tests: lets them check which database the app uses.
+  # Does nothing outside shiny.testmode
+  exportTestValues(db_host = Sys.getenv("SUBASTAS_DB_HOST"))
+  
   # Lots read for this visitor, so they're always the current ones in the database.
   # The rest of the server uses these lots and references
   data <- read_app_data()
@@ -187,7 +208,7 @@ app_server <- function(input, output, session, user_id) {
         if (boe_text == "") TRUE else str_detect(boe_ref, fixed(boe_text, ignore_case = TRUE)),
         # If switch is off -> First part is TRUE, so it doesnt apply any filter
         # filter(TRUE): Returns all rows
-        !input$only_upcoming     | offer_deadline >= Sys.Date()
+        !input$only_upcoming     | offer_deadline >= today()
       )
   }, ignoreNULL = FALSE)
   
@@ -490,6 +511,15 @@ app_server <- function(input, output, session, user_id) {
 }
 
 server <- function(input, output, session) {
+  # e2e tests: no login (see secure_app above), the app starts right away as the user "test"
+  if (is_testmode()) {
+    con <- connect_subastas_db()
+    on.exit(dbDisconnect(con))  # closes the connection however this code ends
+    test_user <- dbGetQuery(con, "SELECT user_id FROM app.users WHERE username = 'test'")
+    app_server(input, output, session, user_id = test_user$user_id)
+    return()
+  }
+
   # Login: checks what was typed with check_user (R/auth.R)
   # Correct: shinymanager reloads the page with the app, and res_auth stores the user_info key, e.g. res_auth$user_id.
   #          user_id is what's used to read and save the notes of the person logged in

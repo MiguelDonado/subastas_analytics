@@ -1,0 +1,9 @@
+# Local database used by the e2e tests. app.R reads this file in shiny.testmode,
+# so these values replace the Neon ones from dashboard/.Renviron
+SUBASTAS_DB_HOST=localhost
+SUBASTAS_DB_PORT=5435
+SUBASTAS_DB_NAME=subastas
+SUBASTAS_DB_USER=subastas_app
+SUBASTAS_DB_PASSWORD=subastas_app
+# The local Postgres has no SSL
+PGSSLMODE=disable

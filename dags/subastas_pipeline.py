@@ -54,8 +54,8 @@ decide how to solve the problem, in two cases:
 - The pipeline fails: A task that fails for good (on its last retry, or right away when it has no retries)
   pings /fail, and the email is immediate.
 - The pipeline doesn't even execute (computer off, timer not firing...): No ping arrives, and
-  the email comes on Tuesday around 10:30 local. The check expects a ping on the same schedule as
-  the timer (Mondays at 10:30 local), plus 1 day of grace.
+  the email comes on Tuesday at 10:00 local. The check expects a ping any time on Monday
+  (local time), plus 1 day and 10 hours of grace.
 """
 
 import os
