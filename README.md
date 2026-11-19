@@ -291,16 +291,18 @@ Details in [`docs/4.deployment.md`](docs/4.deployment.md).
 
 | Stage | What happens | How |
 |---|---|---|
-| **Continuous Integration** | Every pull request to `main`, and every push to `main`, runs the unit tests, integration tests and the DAG tests | GitHub Actions, [`tests.yml`](.github/workflows/tests.yml) |
-| **Protected `main`** | `main` only changes through pull requests, and a pull request can only merge when both checks pass | GitHub ruleset |
+| **Continuous Integration** | Every pull request to `main`, and every push to `main`, runs the unit tests, integration tests, DAG tests and the app's end-to-end tests | GitHub Actions, [`tests.yml`](.github/workflows/tests.yml) |
+| **Protected `main`** | `main` only changes through pull requests, and a pull request can only merge when all three checks pass | GitHub ruleset |
 | **Continuous Deployment** | Merging into `main` republishes the live app, with no manual step | Posit Connect Cloud, watching the repo |
 
 The tests never call the real APIs, so CI needs no API keys and costs nothing.
 
 The app also has end-to-end tests, written with shinytest2. They open the real
 app in Chrome and use it like a person would: they search, click rows and save
-notes, and check that the table, the map and the notes react. They run only on
-my laptop, against a local copy of the database, so they aren't part of CI.
+notes, and check that the table, the map and the notes react. Each run builds
+its own Postgres from the repo: the tables from the gold and app SQL files, and
+the rows from a fixed set of 210 lots. That's what lets them run in CI too,
+since they don't depend on any database outside the repo.
 
 Details in [`docs/5.ci_cd.md`](docs/5.ci_cd.md) and
 [`docs/7.testing.md`](docs/7.testing.md).
@@ -395,8 +397,9 @@ astro dev pytest tests/dags      # DAG tests
 ```
 
 The app's end-to-end tests run from R, in the `dashboard` folder, with
-`shinytest2::test_app()`. They need Docker, Google Chrome and the local database
-described in [`docs/7.testing.md`](docs/7.testing.md#app-end-to-end-e2e-tests).
+`shinytest2::test_app()`. They need Docker and Google Chrome: they start their
+own database (details in
+[`docs/7.testing.md`](docs/7.testing.md#app-end-to-end-e2e-tests)).
 
 ## Future improvements
 

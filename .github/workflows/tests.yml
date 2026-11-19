@@ -42,7 +42,8 @@ jobs:
         # End-to-end tests of the Shiny app. Docker and Google Chrome come with GitHub's Ubuntu machines.
         # setup.R starts a blank Postgres, creates the tables with include/sql/create_gold.sql,
         # create_app.sql and create_app_role.sql, and loads the rows of dashboard/tests/e2e_data.sql
-        runs-on: ubuntu-latest
+        # Pinned, not ubuntu-latest: the binaries URL below is for this Ubuntu version (noble)
+        runs-on: ubuntu-24.04
         defaults:
             run:
                 # Every run step starts in dashboard/, so its .Rprofile activates renv
@@ -51,21 +52,30 @@ jobs:
             # Copy our repo into the runner
             - uses: actions/checkout@v4
 
-            # R, the same version as renv.lock. use-public-rspm: the packages come as ready-built
-            # binaries from Posit's repository instead of being compiled, which takes many minutes
+            # R, the same version as renv.lock
             - uses: r-lib/actions/setup-r@v2
               with:
                   r-version: 4.6.2
                   use-public-rspm: true
-            # System libraries some packages need: libpq for RPostgres, libsodium for sodium
+
+            # System libraries of the app's packages: the list renv printed on the first run,
+            # plus libpq (RPostgres) and libsodium (sodium). Ready-built packages still use them.
             # apt-get update first: the runner's list of packages can be out of date
-            - run: sudo apt-get update && sudo apt-get install -y libpq-dev libsodium-dev
+            - run: >
+                sudo apt-get update && sudo apt-get install -y
+                libpq-dev libsodium-dev cmake gdal-bin libcurl4-openssl-dev libgdal-dev
+                libgeos-dev libpng-dev libproj-dev libudunits2-dev libuv1-dev pandoc
 
             # Install the packages of renv.lock, and caches them for the next runs
             - uses: r-lib/actions/setup-renv@v2
-              with: 
+              with:
                   working-directory: dashboard
-            
+              env:
+                  # renv.lock records CRAN, which only has source code for Linux, so every package
+                  # would be compiled. This makes renv use Posit's ready-built binaries for
+                  # Ubuntu 24.04 instead. The versions are still the ones in renv.lock
+                  RENV_CONFIG_REPOS_OVERRIDE: https://packagemanager.posit.co/cran/__linux__/noble/latest
+
             - name: Run the e2e tests
               run:  Rscript -e 'shinytest2::test_app(".")'
               env:
