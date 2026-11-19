@@ -1,5 +1,5 @@
 # Runs the tests on every pull request to main, and on every push to main.
-# A pull request can only be merged if both jobs pass, once the ruleset 
+# A pull request can only be merged if all three jobs pass, once the ruleset
 # requires them (docs/5.ci_cd.md)
 name: tests
 
@@ -37,3 +37,37 @@ jobs:
             - run: touch .env
 
             - run: astro dev pytest tests/dags
+
+    e2e:
+        # End-to-end tests of the Shiny app. Docker and Google Chrome come with GitHub's Ubuntu machines.
+        # setup.R starts a blank Postgres, creates the tables with include/sql/create_gold.sql,
+        # create_app.sql and create_app_role.sql, and loads the rows of dashboard/tests/e2e_data.sql
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                # Every run step starts in dashboard/, so its .Rprofile activates renv
+                working-directory: dashboard
+        steps:
+            # Copy our repo into the runner
+            - uses: actions/checkout@v4
+
+            # R, the same version as renv.lock. use-public-rspm: the packages come as ready-built
+            # binaries from Posit's repository instead of being compiled, which takes many minutes
+            - uses: r-lib/actions/setup-r@v2
+              with:
+                  r-version: 4.6.2
+                  use-public-rspm: true
+            # System libraries some packages need: libpq for RPostgres, libsodium for sodium
+            # apt-get update first: the runner's list of packages can be out of date
+            - run: sudo apt-get update && sudo apt-get install -y libpq-dev libsodium-dev
+
+            # Install the packages of renv.lock, and caches them for the next runs
+            - uses: r-lib/actions/setup-renv@v2
+              with: 
+                  working-directory: dashboard
+            
+            - name: Run the e2e tests
+              run:  Rscript -e 'shinytest2::test_app(".")'
+              env:
+                  # Without it, shinytest2 thinks it may be on CRAN's servers and skips every test
+                  NOT_CRAN: true

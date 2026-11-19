@@ -1,2 +1,3 @@
 ## Before merging
 - [ ] If the dashboard's packages changed: in `dashboard/`, run `renv::snapshot()` and `rsconnect::writeManifest(appFiles = c("app.R", "R/db.R", "R/auth.R"))`, and commit `renv.lock` and `manifest.json`. Otherwise Posit fails to install them.
+- [ ] If the columns of a gold table changed: regenerate `dashboard/tests/e2e_data.sql` (steps in its header). A removed or renamed column already fails the e2e tests, but a new one loads empty, and the tests pass without checking it.
