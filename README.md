@@ -338,7 +338,8 @@ Details in [`docs/5.ci_cd.md`](docs/5.ci_cd.md) and
    cd subastas_analytics
    ```
 
-2. **Create a Neon project** with a database called `subastas`, and copy its
+2. **Create a Neon project** in AWS US East 2 (Ohio), the region where Posit
+   Connect Cloud runs the app, with a database called `subastas`. Copy its
    connection string from the **Connect** button.
 
 3. **Create the env file** and fill in the connection string and the API keys:
@@ -364,8 +365,10 @@ Details in [`docs/5.ci_cd.md`](docs/5.ci_cd.md) and
    psql "<neon-connection-string>" -f include/sql/create_app_role.sql
    ```
 
-   Then set the password of the database user `subastas_app` in the Neon
-   console (Roles & Databases → `subastas_app` → Reset password).
+   Then set the password of the database user `subastas_app` with SQL, as
+   explained in
+   [`docs/4.deployment.md`](docs/4.deployment.md#setting-the-password-of-subastas_app).
+   The Neon console can't do it, because the role has no password yet.
 
    Last, add the people who will log in to the app to `app.users`. Each one
    gets their own notes. How to do it is in

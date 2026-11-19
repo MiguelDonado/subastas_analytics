@@ -15,6 +15,13 @@ is_testmode <- function() isTRUE(getOption("shiny.testmode"))
 # e2e tests: connect to the local database. Read after .Renviron, so its values replace Neon's
 if (is_testmode()) readRenviron("tests/e2e.Renviron")
 
+# Pool of database connections (R/db.R): created once, when this R process starts, and shared by
+# every session. It has to come after the line above: created before, in the e2e tests it would read
+# the Neon values of .Renviron, and the tests' safety check (db_host must be localhost) would fail
+db_pool <- create_db_pool()
+# Closes the pool's connections when the app stops, e.g. when Posit stops the idle app
+onStop(function() pool::poolClose(db_pool))
+
 # Today, for the "Solo subastas activas" filter. In the e2e tests it's a fixed date,
 # so the active lots are the same on every run
 today <- function() {
@@ -25,13 +32,11 @@ today <- function() {
 # Lots and their catastral references, read on every login so each visitor gets the current data
 read_app_data <- function(){
   # Lots
-  con <- connect_subastas_db()
-  on.exit(dbDisconnect(con)) # closes the connection however this function ends
-  lots <- read_lots(con) |>
+  lots <- read_lots(db_pool) |>
     mutate(
       municipio = str_to_title(municipio)
     )
-  references <- read_lot_references(con) |>
+  references <- read_lot_references(db_pool) |>
     mutate(
       # Text of each marker's popup: the parcel's own data (the lot's is in the table)
       popup = paste0(
@@ -186,9 +191,7 @@ app_server <- function(input, output, session, user_id) {
   # Lots that match the filters
   filtered_lots <- eventReactive(input$update, {
     # The user's notes and statuses are read on every search, so they always match what's saved
-    con <- connect_subastas_db()
-    on.exit(dbDisconnect(con))  # closes the connection however this code ends
-    reviews <- read_user_reviews(con, user_id)
+    reviews <- read_user_reviews(db_pool, user_id)
 
     boe_text <- str_trim(input$boe_ref)  # spaces around what was typed removed
     lots |>
@@ -449,11 +452,9 @@ app_server <- function(input, output, session, user_id) {
     }
 
     lot <- filtered_lots()[row, ]
-    con <- connect_subastas_db()
-    on.exit(dbDisconnect(con))  # closes the connection however this code ends
     # If there is no review, returns a df with 0 rows (its columns are still there
     # but they are empty)
-    review <- read_user_reviews(con, user_id) |>
+    review <- read_user_reviews(db_pool, user_id) |>
       # The selected lot's row: 0 rows if it has no note and no status
       filter(boe_ref == lot$boe_ref, lot_number == lot$lot_number)
 
@@ -484,10 +485,8 @@ app_server <- function(input, output, session, user_id) {
       return()
     }
     
-    con <- connect_subastas_db()
-    on.exit(dbDisconnect(con)) # closes the connection however this code ends
     # It returns how many rows it changed
-    changed <- save_user_review(con, user_id, lot$boe_ref, lot$lot_number, input$note, input$status)
+    changed <- save_user_review(db_pool, user_id, lot$boe_ref, lot$lot_number, input$note, input$status)
     
     if (str_trim(input$note) == "" && input$status == "none"){
       # Only display "Borrado" message if there was something before 
@@ -502,7 +501,7 @@ app_server <- function(input, output, session, user_id) {
     # "Buscar", so they're read again
     new_data <- filtered_lots() |> 
       select(-notes, -status) |> 
-      left_join(read_user_reviews(con, user_id), by = c("boe_ref", "lot_number")) |> 
+      left_join(read_user_reviews(db_pool, user_id), by = c("boe_ref", "lot_number")) |>
       table_data()
     
     dataTableProxy("lots") |> 
@@ -513,19 +512,17 @@ app_server <- function(input, output, session, user_id) {
 server <- function(input, output, session) {
   # e2e tests: no login (see secure_app above), the app starts right away as the user "test"
   if (is_testmode()) {
-    con <- connect_subastas_db()
-    on.exit(dbDisconnect(con))  # closes the connection however this code ends
-    test_user <- dbGetQuery(con, "SELECT user_id FROM app.users WHERE username = 'test'")
+    test_user <- dbGetQuery(db_pool, "SELECT user_id FROM app.users WHERE username = 'test'")
     app_server(input, output, session, user_id = test_user$user_id)
     return()
   }
 
-  # Login: checks what was typed with check_user (R/auth.R)
+  # Login: checks what was typed with the function make_check_user builds (R/auth.R), with the pool inside
   # Correct: shinymanager reloads the page with the app, and res_auth stores the user_info key, e.g. res_auth$user_id.
   #          user_id is what's used to read and save the notes of the person logged in
   # Wrong: the login screen stays, with an error message. The app isn't shown and res_auth stays empty.
-  #        Wrong password and unknown name give the same message (check_user returns result = FALSE for both)
-  res_auth <- secure_server(check_credentials = check_user)
+  #        Wrong password and unknown name give the same message (the function returns result = FALSE for both)
+  res_auth <- secure_server(check_credentials = make_check_user(db_pool))
 
   # The app's server code only starts once someone has logged in, so nothing of it runs on the login page.
   # Before login res_auth$user_id is NULL, which observeEvent ignores. 

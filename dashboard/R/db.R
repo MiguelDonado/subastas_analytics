@@ -2,8 +2,15 @@
 # Connection settings come from environment variables (dashboard/.Renviron)
 library(DBI)
 
-connect_subastas_db <- function() {
-  dbConnect(
+# Pool of connections, created once per R process and shared by all its sessions (app.R).
+# Each query borrows a connection that's already open and returns it right away, instead of
+# opening a new one: to Neon, opening one takes ~330 ms, about 4 round trips.
+# - Defaults kept: at least 1 connection stays open, and the extra ones close after 60 s unused.
+# - A connection unused for more than 60 s is checked before lending it, and replaced if it's
+#   dead, e.g. after Neon went to sleep and closed it.
+# The query functions below receive the pool as `con`: DBI functions work the same with it
+create_db_pool <- function() {
+  pool::dbPool(
     RPostgres::Postgres(),
     host     = Sys.getenv("SUBASTAS_DB_HOST"),
     port     = as.integer(Sys.getenv("SUBASTAS_DB_PORT")),

@@ -1,6 +1,5 @@
-1. Integrar los E2E test en CI
-2. Optimize shiny
-3. Record videos
+1. Optimize shiny
+2. Record videos
 
 
 **Future improvements**
