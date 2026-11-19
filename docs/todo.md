@@ -1,5 +1,4 @@
-1. Optimize shiny
-2. Record videos
+1. Record videos
 
 
 **Future improvements**

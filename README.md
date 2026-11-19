@@ -13,25 +13,26 @@ map viewers and other websites, but also because the process wasn't organized:
 I often had to check the same land several times, because I didn't remember
 some of its characteristics.
 
-It was a good fit for this kind of project:
+Why it was a good fit for this kind of project:
 
-- **A clear use for GenAI:** the auctions are published as free text. Claude
-  reads each announcement and extracts the lots, their prices and their
-  catastral references.
-- **A clear data engineering pipeline:** a weekly Airflow DAG that collects the
-  announcements, enriches them with Catastro data and loads them into
-  PostgreSQL.
-- **A good case for OLAP data modelling:** the data goes from raw text to a
-  model built for analysis, which the app reads.
-- **A clear final use:** a web app where I explore the lots on a map and in a table, and decide
-  which ones are worth investing in.
+- **A clear use for GenAI:** the auctions are public, but they come in raw form:
+  long documents with many pages of legal text, when only a few details matter,
+  like the lots, their prices and their catastral references. Claude reads each
+  announcement and pulls out just those details.
+- **A clear data engineering pipeline:** a weekly Airflow DAG collects the
+  announcements, uses Claude (API) to pull out the useful information, adds
+  Catastro data (API) and loads everything into PostgreSQL.
+- **A clear final use:** a web app where I explore the lots on a map and in a
+  table, and decide which ones are worth investing in. It's useful for me and
+  two close contacts who also want to invest in these properties.
 
 **Live app:** <https://01a1e61c-7dc8-69e3-b535-b360f28ed430.share.connect.posit.cloud/>
 (the first visit after a while takes a few seconds, while the app and the
 database wake up)
 
-To try it, log in with the test user: username `test`, password `test`. Its notes are shared
-with everyone who uses it.
+Each of us three has a private user with our own notes. Anyone can try the app
+with the public test user: username `test`, password `test`. The downside is
+that its notes are shared with everyone who uses it.
 
 ---
 
@@ -42,6 +43,7 @@ with everyone who uses it.
 >
 > 1. ▶️ **[Project walkthrough](TODO)**: the project and how the code works
 > 2. ▶️ **[How to use the dashboard](TODO)**: filters, map, table and notes
+> 3. ▶️ **[Local setup](TODO)**: how to run the project on your machine
 
 ---
 
@@ -89,45 +91,42 @@ consolidation (concentración parcelaria). Each auction is published in two plac
   publishes the pliego de condiciones of each auction: a PDF with the complete,
   detailed information. Example: [pliego of an auction in Soria](assets/example_pliego_soria.pdf).
 - **The [BOE](https://www.boe.es)** (Boletín Oficial del Estado) publishes a
-  daily summary, which the [BOE Open Data API](https://www.boe.es/datosabiertos/)
-  serves. The pipeline reads these summaries to find the auction announcements
-  of the Delegaciones de Economía y Hacienda. An announcement has less
-  information than the pliego, but it contains everything the app needs. Example: [announcement of the same auction](https://www.boe.es/diario_boe/txt.php?id=BOE-B-2026-34259).
+  daily summary, served by the [BOE Open Data API](https://www.boe.es/datosabiertos/),
+  that includes each auction. For each one there is an announcement, available
+  as XML or TXT, rather than the PDF pliego. It has a bit less information than the
+  pliego, but enough for this app, so the pipeline reads these announcements.
+  Example: [announcement of the same auction](https://www.boe.es/diario_boe/txt.php?id=BOE-B-2026-34259).
 
-I like nature and see rustic land as a good investment, so once I start working
-again I'd like to buy more if I see a good opportunity.
+**Why do I care about these auctions?**
 
-The problem was the time each one took. For every announcement I had to read
-the text, find the catastral references, look each parcel up in the Catastro
-and other map viewers, check where it is, look at the aerial photo, and then
-decide. And since I wasn't saving any of it, it quickly became a mess: to
-compare the properties I hadn't discarded and pick the most interesting ones, I
-often had to go through the whole process again for each of them.
+I like nature and see rustic land as a good investment. I'd also like to do
+projects on it in the near future, like planting trees. So once I start
+working again, I'd like to buy more if I see a good opportunity.
 
-This application does most of that work for me. It leads to better decisions
-by making the whole process much faster, keeping everything organized, and
-avoiding redundancy: I no longer have to collect the data of the same land
-several times. It's also useful for other people around me who are interested
-in these auctions, like my father and my friend Silvia, so each of them has
-their own user.
+**Why build an application instead of doing it by hand?**
+
+By hand, every announcement meant reading the text, finding the catastral
+references and looking each parcel up in the Catastro and other map viewers.
+This application does that work for me and keeps everything in one place, so I
+can compare the lots and decide faster.
 
 ---
 
 ## Objectives
 
 1. **Practice building useful things.** With AI, only executing technical tasks
-   has less and less value. What matters is being curious, asking questions,
-   finding new problems and designing the architecture of their solution. I also
-   want to start a company one day, and small projects like this one, about
-   topics I care about, are the stepping stones towards it.
+   has less and less value. What matters is being curious, finding real
+   problems and designing their solution. Those are also the skills I'll need
+   to start a company one day, and small projects like this one, about topics I
+   care about, are the stepping stones towards it.
 2. **Practice data engineering:** a real Airflow pipeline, tests and CI, and
    databases, with a focus on OLAP data modelling: a medallion architecture
    (bronze, silver and gold), where gold is a dimensional model following a star schema.
-3. **Help me invest in rustic properties:** find the interesting lots quickly
-   and keep a record of my decisions.
+3. **Help me invest in rustic properties.**
 4. **Build a GenAI application:** practice seeing where AI is a good fit, and
-   use it where it really adds value. Here it reads free-text announcements and
-   turns them into structured data.
+   use it where it really adds value. Here, Claude reads each auction
+   announcement and picks out the lots, their prices and their catastral
+   references, so I don't have to read the whole text.
 
 ---
 
@@ -168,59 +167,50 @@ the only source. Claude and Goolzoom are called with data already in bronze, so
 their results are enrichment and go straight to silver
 ([why](docs/2.data_modelling.md#only-the-boes-content-is-stored-in-bronze)).
 
+**What happens with subsequent auctions?**
+
 When an auction has a second or third round, it's a new announcement in the
-BOE, so it's loaded like any other. The rounds of the same property are linked
-through their catastral references.
+BOE, so it's loaded like any other.
 
-Alerts follow the rule "no news is bad news": every successful run pings
-[healthchecks.io](https://healthchecks.io), and if the ping doesn't arrive, it
-emails me. A failed task also pings it right away. So it emails me when:
+**How do I know if something goes wrong?**
 
-- A task still fails after its retries, or an announcement fails in silver. The email is sent right away.
-- No auction titles show up in the BOE for 2 weeks in a row, which suggests the regexes no longer match. The email is sent right away.
-- The pipeline doesn't run at all, for example because the laptop was off. The email comes on Tuesday at 10:00.
-
-The email only says that something went wrong. The cause is in the Airflow
-task logs:
-
-- **Bronze:** how many titles passed the regexes and how many Claude confirmed.
-  Each title Claude rejected gets a `NOT AN AUCTION` line. A title that mentions
-  Hacienda and subasta but doesn't pass the regexes gets a `NEAR MISS` line.
-- **Silver:** every announcement ends with one line that includes its BOE
-  reference: `LOADED`, `FAILED` (a problem with the announcement, with the
-  reason) or `STOPPED` (Claude or Goolzoom failed). Each lot or catastral
-  reference that was left out gets a `REJECTED` line that says why.
-
-Details in [`docs/1.scheduling_monitoring.md`](docs/1.scheduling_monitoring.md).
+[healthchecks.io](https://healthchecks.io) emails me when a run fails, when it
+doesn't run at all (for example, because the laptop was off), or when no
+auction titles show up in the BOE for 2 weeks in a row, which suggests the
+regexes no longer match. The cause is in the Airflow task logs, where every
+announcement ends with a line like `LOADED` or `FAILED`. Details in
+[`docs/1.scheduling_monitoring.md`](docs/1.scheduling_monitoring.md).
 
 ### 2. Web application
 
-A Shiny app with a login. On the left, filters (province, municipio, class,
-use, maximum price, minimum surface, status). On the right, a map with the
-parcels on top and a table with one row per lot below. Clicking a row zooms the
-map to its parcels, and clicking a parcel selects its row in the table.
+A Shiny app with a login.
 
-Each parcel is a marker on the map. Its popup shows the main data of that
-parcel: catastral reference, use, class, surface and crop, plus a link to open
-it in Google Maps.
+**Layout**
 
-Each user can mark a lot as **Interesado** or **Descartado** and write a note
-on it, for example "visited, it is very steep".
+- **On the left:** the filters and, below them, a box with the status and note
+  of the selected lot.
+- **On the right:** a map with the parcels on top, and a table with one row per
+  lot below.
+
+**Functionality**
+
+- **Filters:** province, municipio, class, status, maximum price, minimum
+  surface, BOE reference and only active auctions.
+- **Status and notes:** mark the selected lot as **Interesado** or
+  **Descartado** and write a note on it, for example "visited, it is very
+  steep". Each user has their own status and notes. They're saved right away
+  in the app's own schema, apart from the weekly data
+  ([why](#database-olap-and-oltp)).
+- **Map and table linked:** clicking a row zooms the map to its parcels, and
+  clicking a parcel selects its row in the table.
+- **Parcel popup:** each parcel is a marker on the map. Its popup shows the
+  catastral reference, use, class, surface and crop, plus a link to open it in
+  Google Maps.
 
 ### 3. Analytics: how I use it to decide
 
-Right now the app doesn't draw conclusions on its own: it has no summaries,
-trends or models. The analysis is done by me while using it, and the app gives
-me the data in the right shape to do it quickly:
-
-1. Every week, filter by **Sin revisar** to see only the new lots.
-2. Filter by what I'm looking for: area, class, price, surface.
-3. Compare the lots in the table, for example by **€/m²**.
-4. For the ones that look interesting, check the parcels on the aerial photo
-   and the Catastro layer: access, surroundings, crops, rivers.
-5. Mark each lot as Interesado or Descartado, with a note.
-6. Only for the few marked as Interesado, read the conditions on Hacienda's
-   website and decide whether to bid.
+How I use the app to pick the lots worth bidding on is shown in the video
+[How to use the dashboard](TODO).
 
 ### Database: OLAP and OLTP
 
@@ -296,13 +286,6 @@ Details in [`docs/4.deployment.md`](docs/4.deployment.md).
 | **Continuous Deployment** | Merging into `main` republishes the live app, with no manual step | Posit Connect Cloud, watching the repo |
 
 The tests never call the real APIs, so CI needs no API keys and costs nothing.
-
-The app also has end-to-end tests, written with shinytest2. They open the real
-app in Chrome and use it like a person would: they search, click rows and save
-notes, and check that the table, the map and the notes react. Each run builds
-its own Postgres from the repo: the tables from the gold and app SQL files, and
-the rows from a fixed set of 210 lots. That's what lets them run in CI too,
-since they don't depend on any database outside the repo.
 
 Details in [`docs/5.ci_cd.md`](docs/5.ci_cd.md) and
 [`docs/7.testing.md`](docs/7.testing.md).
@@ -406,17 +389,14 @@ own database (details in
 
 ## Future improvements
 
-Right now the project has no data analysis part of its own. These additions
+Right now the project has no data analysis part of its own. This addition
 would give it one:
 
 - **Compare each lot with a reference price:** the starting price against the
   Catastro's reference value (valor de referencia) of its parcels, which covers
   all rustic land, forest included.
-- **Learn from my reviews:** compare the lots marked Interesado with the
-  Descartado ones, and later a model that flags the lots I would probably like.
 
-Other ideas: an open-source LLM to cut costs, and a faster
-app on Posit Connect Cloud.
+Other ideas: an open-source LLM to cut costs.
 
 ---
 
