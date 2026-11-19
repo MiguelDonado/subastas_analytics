@@ -1,4 +1,4 @@
-1. E2E test (pasar a limpio apuntes primero)
+1. Integrar los E2E test en CI
 2. Optimize shiny
 3. Record videos
 
