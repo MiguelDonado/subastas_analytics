@@ -1,4 +1,5 @@
 # Runs the tests on every pull request to main, and on every push to main.
+# Docs-only changes skip the three test jobs.
 # A pull request can only be merged if all three jobs pass, once the ruleset
 # requires them (docs/5.ci_cd.md)
 name: tests
@@ -10,7 +11,33 @@ on:
         branches: [main]
 
 jobs:
+    # Looks at the changed files. Docs-only changes skip the test jobs below;
+    # a skipped job counts as passed, so the ruleset still lets the PR merge
+    changes:
+        runs-on: ubuntu-latest
+        outputs:
+            code: ${{ steps.filter.outputs.code }}
+        steps:
+            - uses: actions/checkout@v4
+            - uses: dorny/paths-filter@v3
+              id: filter
+              with:
+                  # "every": a file counts only if it matches all the patterns,
+                  # so these lines read as "any file, except..."
+                  predicate-quantifier: every
+                  filters: |
+                      code:
+                          - '**'
+                          - '!**/*.md'
+                          - '!docs/**'
+                          - '!assets/**'
+                          - '!data_modeling/**'
+                          - '!LICENSE'
+
     unit-and-integration:
+        # Wait for the changes job, and skip this job if only docs changed
+        needs: changes
+        if: needs.changes.outputs.code == 'true'
         # Github Ubuntu machines come with Docker, so testcontainers can start Postgres here too
         runs-on: ubuntu-latest
         steps:
@@ -24,6 +51,8 @@ jobs:
             - run: uv run pytest
 
     dags:
+        needs: changes
+        if: needs.changes.outputs.code == 'true'
         # Separate job: it needs the Astro CLI and builds the Airflow image
         runs-on: ubuntu-latest
         steps:
@@ -39,6 +68,8 @@ jobs:
             - run: astro dev pytest tests/dags
 
     e2e:
+        needs: changes
+        if: needs.changes.outputs.code == 'true'
         # End-to-end tests of the Shiny app. Docker and Google Chrome come with GitHub's Ubuntu machines.
         # setup.R starts a blank Postgres, creates the tables with include/sql/create_gold.sql,
         # create_app.sql and create_app_role.sql, and loads the rows of dashboard/tests/e2e_data.sql
