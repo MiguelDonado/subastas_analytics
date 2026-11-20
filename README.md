@@ -41,9 +41,9 @@ that its notes are shared with everyone who uses it.
 > [!IMPORTANT]
 > **Watch these videos before using the application.**
 >
-> 1. ▶️ **[Project walkthrough](TODO)**: the project and how the code works
+> 1. ▶️ **[Project walkthrough](https://youtu.be/e405G_-BcQY)**: the project and how the code works
 > 2. ▶️ **[How to use the dashboard](https://youtu.be/CzUdDmlI93k)**: filters, map, table and notes
-> 3. ▶️ **[Local setup](TODO)**: how to run the project on your machine
+> 3. ▶️ **[Local setup](https://youtu.be/_qQuOEJ93zk)**: how to run the project on your machine
 
 ---
 
@@ -294,6 +294,9 @@ Details in [`docs/5.ci_cd.md`](docs/5.ci_cd.md) and
 
 ## Getting Started
 
+The whole setup is shown in the video
+[Local setup](https://youtu.be/_qQuOEJ93zk).
+
 On Ubuntu, update the system first:
 
 ```bash
@@ -303,9 +306,9 @@ sudo apt upgrade
 
 ### Prerequisites
 
+- rig, to install and switch between R versions.
 - R 4.6.2, the version in `dashboard/renv.lock` (`"R": {"Version": ...}`).
-  With [rig](https://github.com/r-lib/rig) you can install it next to the ones
-  you already have:
+  With rig you can install it next to the ones you already have:
 
   ```bash
   rig add 4.6.2
@@ -379,10 +382,12 @@ hosted is in [Deployment](#deployment).
    The last command asks for the password of `subastas_app`.
 
 7. **Run the app.**
-   1. Copy `dashboard/.Renviron.example` to `dashboard/.Renviron` and fill in
-      the password of `subastas_app`.
-   2. Open `dashboard/dashboard.Rproj` in RStudio, or start R from the
-      `dashboard` folder, and install the R packages:
+   1. Create the R env file and fill in the password of `subastas_app`:
+
+      ```bash
+      cp dashboard/.Renviron.example dashboard/.Renviron
+      ```
+   2. Open `dashboard/dashboard.Rproj` in RStudio and install the R packages:
 
       ```r
       renv::restore()
