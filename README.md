@@ -301,16 +301,16 @@ Details in [`docs/5.ci_cd.md`](docs/5.ci_cd.md) and
   Airflow locally. No Astronomer account is needed.
 - **[uv](https://docs.astral.sh/uv/)**: to install the Python dependencies and
   run the tests.
-- **R** with **renv**: only to run the shiny app on your own machine.
+- **R** with **renv**: to run the shiny app.
 - **Accounts and API keys:**
   - [Anthropic](https://console.anthropic.com): Claude API key (paid per use).
   - [Goolzoom](https://www.goolzoom.com): API key to add the Catastro data to
     each catastral reference (free).
-  - [Neon](https://neon.tech): the database (free plan).
   - [Healthchecks.io](https://healthchecks.io): a check for the alerts (free
     plan).
-  - [Posit Connect Cloud](https://connect.posit.cloud): only to publish the shiny app
-    online (free plan).
+
+Everything runs on your machine, the database included. How the live app is
+hosted is in [Deployment](#deployment).
 
 ### Setup
 
@@ -321,17 +321,22 @@ Details in [`docs/5.ci_cd.md`](docs/5.ci_cd.md) and
    cd subastas_analytics
    ```
 
-2. **Create a Neon project** in AWS US East 2 (Ohio), the region where Posit
-   Connect Cloud runs the app, with a database called `subastas`. Copy its
-   connection string from the **Connect** button.
+2. **Add the local database.** Copy the Docker Compose file that adds a
+   Postgres container, and its env file, then choose a password in
+   `subastas-db.env`:
 
-3. **Create the env file** and fill in the connection string and the API keys:
+   ```bash
+   cp docker-compose.override.yml.example docker-compose.override.yml
+   cp subastas-db.env.example subastas-db.env
+   ```
+
+3. **Create the env file** and fill in the same password and the API keys:
 
    ```bash
    cp .env.example .env
    ```
 
-4. **Start Airflow:**
+4. **Start Airflow** and the database:
 
    ```bash
    astro dev start
@@ -341,35 +346,32 @@ Details in [`docs/5.ci_cd.md`](docs/5.ci_cd.md) and
    for every Monday since its `start_date`. Each run sends the new
    announcements to Claude, so it costs API credits.
 
-5. **Create the app schema and the database user `subastas_app`**, once, connected to Neon with the owner database user:
+5. **Create the app schema and the database user `subastas_app`**, once,
+   after the first DAG run has finished (the user reads the gold tables, so
+   they must exist). The commands use the psql inside the database container:
 
    ```bash
-   psql "<neon-connection-string>" -f include/sql/create_app.sql
-   psql "<neon-connection-string>" -f include/sql/create_app_role.sql
+   DB=$(docker ps -qf label=com.docker.compose.service=subastas-db)
+   docker exec -i "$DB" psql -U subastas -d subastas -v ON_ERROR_STOP=1 < include/sql/create_app.sql
+   docker exec -i "$DB" psql -U subastas -d subastas -v ON_ERROR_STOP=1 < include/sql/create_app_role.sql
+   docker exec -it "$DB" psql -U subastas -d subastas -c '\password subastas_app'
    ```
 
-   Then set the password of the database user `subastas_app` with SQL, as
-   explained in
-   [`docs/4.deployment.md`](docs/4.deployment.md#setting-the-password-of-subastas_app).
-   The Neon console can't do it, because the role has no password yet.
+   The last command asks for the password of `subastas_app`.
 
    Last, add the people who will log in to the app to `app.users`. Each one
    gets their own notes. How to do it is in
    [`docs/11.reviews.md`](docs/11.reviews.md).
 
-6. **Run the app locally.** Copy `dashboard/.Renviron.example` to
-   `dashboard/.Renviron` and fill in two values: the Neon host (the part
-   between `@` and `/` in the connection string) and the password of the
-   database user `subastas_app`. Then open `dashboard/dashboard.Rproj` in
-   RStudio, or start R from the `dashboard` folder, and run:
+6. **Run the app.** Copy `dashboard/.Renviron.example` to
+   `dashboard/.Renviron` and fill in the password of `subastas_app`. Then open
+   `dashboard/dashboard.Rproj` in RStudio, or start R from the `dashboard`
+   folder, and run:
 
    ```r
    renv::restore()
    shiny::runApp()
    ```
-
-   To publish it online instead, follow
-   [`docs/4.deployment.md`](docs/4.deployment.md).
 
 7. **Optional: schedule it.** To start and stop Airflow every Monday with a
    systemd timer, follow [`systemd/README.md`](systemd/README.md).
