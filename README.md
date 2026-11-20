@@ -296,18 +296,15 @@ Details in [`docs/5.ci_cd.md`](docs/5.ci_cd.md) and
 
 ### Prerequisites
 
-- **[Docker](https://docs.docker.com/get-docker/)**: Airflow runs in containers.
-- **[Astro CLI](https://www.astronomer.io/docs/astro/cli/install-cli)**: runs
-  Airflow locally. No Astronomer account is needed.
-- **[uv](https://docs.astral.sh/uv/)**: to install the Python dependencies and
-  run the tests.
+- **Docker**: Airflow runs in containers.
+- **Astro CLI**: runs Airflow locally. No Astronomer account is needed.
+- **uv**: to install the Python dependencies and run the tests.
 - **R** with **renv**: to run the shiny app.
 - **Accounts and API keys:**
-  - [Anthropic](https://console.anthropic.com): Claude API key (paid per use).
-  - [Goolzoom](https://www.goolzoom.com): API key to add the Catastro data to
-    each catastral reference (free).
-  - [Healthchecks.io](https://healthchecks.io): a check for the alerts (free
-    plan).
+  - Anthropic: Claude API key (paid per use).
+  - Goolzoom: API key to add the Catastro data to each catastral reference
+    (free).
+  - Healthchecks.io: a check for the alerts (free plan).
 
 Everything runs on your machine, the database included. How the live app is
 hosted is in [Deployment](#deployment).
