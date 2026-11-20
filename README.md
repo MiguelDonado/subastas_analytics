@@ -303,20 +303,18 @@ sudo apt upgrade
 
 ### Prerequisites
 
-- [Docker](https://docs.docker.com/get-docker/), with your user in the
-  `docker` group so it works without `sudo`:
+- Docker, with your user in the `docker` group so it works without `sudo`:
 
   ```bash
   sudo usermod -aG docker $USER
   newgrp docker
   ```
-- [Astro CLI](https://www.astronomer.io/docs/astro/cli/install-cli)
-- [uv](https://docs.astral.sh/uv/)
+- Astro CLI
+- uv
 - R (version in `dashboard/renv.lock`)
-- [RStudio](https://posit.co/download/rstudio-desktop/)
-- [DBeaver](https://dbeaver.io/download/)
-- API keys: [Anthropic](https://console.anthropic.com),
-  [Goolzoom](https://www.goolzoom.com), [Healthchecks.io](https://healthchecks.io)
+- RStudio
+- DBeaver
+- API keys: Anthropic, Goolzoom, Healthchecks.io
 
 Everything runs on your machine, the database included. How the live app is
 hosted is in [Deployment](#deployment).
