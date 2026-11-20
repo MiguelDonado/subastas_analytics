@@ -42,7 +42,7 @@ that its notes are shared with everyone who uses it.
 > **Watch these videos before using the application.**
 >
 > 1. ▶️ **[Project walkthrough](TODO)**: the project and how the code works
-> 2. ▶️ **[How to use the dashboard](TODO)**: filters, map, table and notes
+> 2. ▶️ **[How to use the dashboard](https://youtu.be/CzUdDmlI93k)**: filters, map, table and notes
 > 3. ▶️ **[Local setup](TODO)**: how to run the project on your machine
 
 ---
@@ -210,7 +210,7 @@ A Shiny app with a login.
 ### 3. Analytics: how I use it to decide
 
 How I use the app to pick the lots worth bidding on is shown in the video
-[How to use the dashboard](TODO).
+[How to use the dashboard](https://youtu.be/CzUdDmlI93k).
 
 ### Database: OLAP and OLTP
 
@@ -294,34 +294,52 @@ Details in [`docs/5.ci_cd.md`](docs/5.ci_cd.md) and
 
 ## Getting Started
 
+On Ubuntu, update the system first:
+
+```bash
+sudo apt update
+sudo apt upgrade
+```
+
 ### Prerequisites
 
-- **[Docker](https://docs.docker.com/get-docker/)**: Airflow runs in containers.
-- **[Astro CLI](https://www.astronomer.io/docs/astro/cli/install-cli)**: runs
-  Airflow locally. No Astronomer account is needed.
-- **[uv](https://docs.astral.sh/uv/)**: to install the Python dependencies and
-  run the tests.
-- **R** with **renv**: to run the shiny app.
-- **Accounts and API keys:**
-  - [Anthropic](https://console.anthropic.com): Claude API key (paid per use).
-  - [Goolzoom](https://www.goolzoom.com): API key to add the Catastro data to
-    each catastral reference (free).
-  - [Healthchecks.io](https://healthchecks.io): a check for the alerts (free
-    plan).
+- [Docker](https://docs.docker.com/get-docker/), with your user in the
+  `docker` group so it works without `sudo`:
+
+  ```bash
+  sudo usermod -aG docker $USER
+  newgrp docker
+  ```
+- [Astro CLI](https://www.astronomer.io/docs/astro/cli/install-cli)
+- [uv](https://docs.astral.sh/uv/)
+- R (version in `dashboard/renv.lock`)
+- [RStudio](https://posit.co/download/rstudio-desktop/)
+- [DBeaver](https://dbeaver.io/download/)
+- API keys: [Anthropic](https://console.anthropic.com),
+  [Goolzoom](https://www.goolzoom.com), [Healthchecks.io](https://healthchecks.io)
 
 Everything runs on your machine, the database included. How the live app is
 hosted is in [Deployment](#deployment).
 
 ### Setup
 
-1. **Clone the repository:**
+1. **Install the system libraries** that the R packages use (Linux only; on
+   Windows and macOS the R packages include them). On Ubuntu:
+
+   ```bash
+   sudo apt install libpq-dev libsodium-dev libcurl4-openssl-dev libssl-dev \
+     libuv1-dev zlib1g-dev libicu-dev libpng-dev \
+     libgdal-dev libgeos-dev libproj-dev libsqlite3-dev libudunits2-dev libabsl-dev
+   ```
+
+2. **Clone the repository:**
 
    ```bash
    git clone https://github.com/MiguelDonado/subastas_analytics.git
    cd subastas_analytics
    ```
 
-2. **Add the local database.** Copy the Docker Compose file that adds a
+3. **Add the local database.** Copy the Docker Compose file that adds a
    Postgres container, and its env file, then choose a password in
    `subastas-db.env`:
 
@@ -330,13 +348,14 @@ hosted is in [Deployment](#deployment).
    cp subastas-db.env.example subastas-db.env
    ```
 
-3. **Create the env file** and fill in the same password and the API keys:
+4. **Create the env file** and fill in the password of `subastas-db.env` in
+   `AIRFLOW_CONN_SUBASTAS_DB`, and the API keys:
 
    ```bash
    cp .env.example .env
    ```
 
-4. **Start Airflow** and the database:
+5. **Start Airflow** and the database:
 
    ```bash
    astro dev start
@@ -346,7 +365,7 @@ hosted is in [Deployment](#deployment).
    for every Monday since its `start_date`. Each run sends the new
    announcements to Claude, so it costs API credits.
 
-5. **Create the app schema and the database user `subastas_app`**, once,
+6. **Create the app schema and the database user `subastas_app`**, once,
    after the first DAG run has finished (the user reads the gold tables, so
    they must exist). The commands use the psql inside the database container:
 
@@ -359,35 +378,51 @@ hosted is in [Deployment](#deployment).
 
    The last command asks for the password of `subastas_app`.
 
-   Last, add the people who will log in to the app to `app.users`. Each one
-   gets their own notes. How to do it is in
-   [`docs/11.reviews.md`](docs/11.reviews.md).
+7. **Run the app.**
+   1. Install the R version in `dashboard/renv.lock` (`"R": {"Version": ...}`).
+      With [rig](https://github.com/r-lib/rig) you can install it next to the
+      ones you already have:
 
-6. **Run the app.** Copy `dashboard/.Renviron.example` to
-   `dashboard/.Renviron` and fill in the password of `subastas_app`. Then open
-   `dashboard/dashboard.Rproj` in RStudio, or start R from the `dashboard`
-   folder, and run:
+      ```bash
+      rig add <version>
+      ```
 
-   ```r
-   renv::restore()
-   shiny::runApp()
-   ```
+      If you have several R versions, choose this one in RStudio, in Tools →
+      Global Options → General.
+   2. Copy `dashboard/.Renviron.example` to `dashboard/.Renviron` and fill in
+      the password of `subastas_app`.
+   3. Open `dashboard/dashboard.Rproj` in RStudio, or start R from the
+      `dashboard` folder, and install the R packages:
 
-7. **Optional: schedule it.** To start and stop Airflow every Monday with a
-   systemd timer, follow [`systemd/README.md`](systemd/README.md).
+      ```r
+      renv::restore()
+      ```
 
-To run the tests:
+   4. Add the people who will log in to the app. Each one gets their own
+      notes. Make the hash of their password in R. It asks for the password
+      without showing it, and prints a long text that starts with `$7$`:
 
-```bash
-uv sync
-uv run pytest                    # unit and integration tests
-astro dev pytest tests/dags      # DAG tests
-```
+      ```r
+      sodium::password_store(askpass::askpass("Password"))
+      ```
 
-The app's end-to-end tests run from R, in the `dashboard` folder, with
-`shinytest2::test_app()`. They need Docker and Google Chrome: they start their
-own database (details in
-[`docs/7.testing.md`](docs/7.testing.md#app-end-to-end-e2e-tests)).
+      In DBeaver, connect to the database: host `localhost`, port `5436`,
+      database `subastas`, and the user and password of `subastas-db.env`.
+      Then insert the user with the hash:
+
+      ```sql
+      INSERT INTO app.users (username, password_hash) VALUES ('<name>', '<hash>');
+      ```
+
+   5. Start the app:
+
+      ```r
+      shiny::runApp()
+      ```
+
+To schedule it every Monday, see
+[`docs/1.scheduling_monitoring.md`](docs/1.scheduling_monitoring.md#systemd-timer).
+To run the tests, see [`docs/7.testing.md`](docs/7.testing.md).
 
 ## Future improvements
 
