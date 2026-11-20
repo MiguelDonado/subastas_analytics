@@ -1,0 +1,87 @@
+# Template of docker-compose.override.yml for the local setup: copy it over
+# docker-compose.override.yml. It's the same file, plus a local Postgres
+# container for the database.
+#
+# `astro dev start` merges docker-compose.override.yml into the Docker Compose
+# configuration that the Astro CLI generates. New service names add containers;
+# existing names (e.g. `scheduler`) would modify the ones Astro defines.
+# Run `astro dev restart` after changing it.
+
+services:
+  # Postgres database for the properties information (separate from Airflow's own
+  # metadata database). The service name is also the container's hostname on
+  # the Docker network, so Airflow connects to it as host `subastas-db`.
+  subastas-db:
+    # Official Postgres image, major version pinned: the data files on disk can
+    # only be read by the same major version, so a silent upgrade would break it.
+    image: postgres:17
+
+    # Don't start it again on boot, same as the Airflow containers below.
+    restart: "no"
+
+    # POSTGRES_USER, POSTGRES_PASSWORD and POSTGRES_DB, read by the image to
+    # create the superuser and the database. Kept in subastas-db.env, out of git
+    # (template: subastas-db.env.example).
+    # Applied ONLY on the first start, when the data directory is empty. Changing
+    # them later does nothing: change the password with SQL, or delete the
+    # volume and start over.
+    env_file:
+      - ./subastas-db.env
+
+    # host port : container port. Exposes Postgres on localhost:5436 for DBeaver
+    # or the app on the host (5432 is taken by Astro's own Postgres, 5435 by the
+    # app's e2e tests). Airflow doesn't use this mapping: it talks to
+    # subastas-db:5432 directly over the Docker network.
+    ports:
+      - "127.0.0.1:5436:5432"
+
+    # Named volume mounted where Postgres 17 keeps its files, so the data lives
+    # outside the container and survives stop/restart. On the host it's under
+    # /var/lib/docker/volumes/. `astro dev kill` will most likely delete it.
+    volumes:
+      - subastas_db_data:/var/lib/postgresql/data
+
+    # Astro's network, shared with the scheduler and the other Airflow
+    # containers. Containers can only reach each other by name on the same network.
+    networks:
+      - airflow
+
+  # These containers should only run during the weekly window. Astro sets them to
+  # `unless-stopped`, so after a power cut they would start on boot and stay up
+  # until the next `astro dev stop`.
+  # There is a trade-off: with `unless-stopped`, a run cut off by a power cut would
+  # carry on by itself on boot. We still prefer "no", so the containers don't stay
+  # running in the background during the whole week without us knowing. The cut-off
+  # run stays paused until Airflow next starts, and healthchecks.io alerts us because
+  # the success ping never arrives.
+  postgres:
+    restart: "no"
+  # The four below wait until Airflow's database is set up before starting.
+  # Astro only makes them wait until the setup starts, so on a new database they
+  # started too early, failed, and stayed off (because of restart: "no").
+  # We want to wait until the setup finishes
+  scheduler:
+    restart: "no"
+    depends_on:
+      db-migration:
+        condition: service_completed_successfully
+  dag-processor:
+    restart: "no"
+    depends_on:
+      db-migration:
+        condition: service_completed_successfully
+  api-server:
+    restart: "no"
+    depends_on:
+      db-migration:
+        condition: service_completed_successfully
+  triggerer:
+    restart: "no"
+    depends_on:
+      db-migration:
+        condition: service_completed_successfully
+
+# Declares the named volume used above. Without this, Compose fails with
+# `service "subastas-db" refers to undefined volume subastas_db_data`.
+volumes:
+  subastas_db_data:
