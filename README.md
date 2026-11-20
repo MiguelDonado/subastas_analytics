@@ -303,18 +303,23 @@ sudo apt upgrade
 
 ### Prerequisites
 
-- Docker, with your user in the `docker` group so it works without `sudo`:
+- R 4.6.2, the version in `dashboard/renv.lock` (`"R": {"Version": ...}`).
+  With [rig](https://github.com/r-lib/rig) you can install it next to the ones
+  you already have:
 
   ```bash
-  sudo usermod -aG docker $USER
-  newgrp docker
+  rig add 4.6.2
   ```
+
+  If you have several R versions, choose this one in RStudio, in Tools →
+  Global Options → General.
+- Docker, with your user in the `docker` group.
 - Astro CLI
 - uv
-- R (version in `dashboard/renv.lock`)
 - RStudio
 - DBeaver
-- API keys: Anthropic, Goolzoom, Healthchecks.io
+- API keys: Anthropic, Goolzoom
+- A Healthchecks.io check (its ping URL)
 
 Everything runs on your machine, the database included. How the live app is
 hosted is in [Deployment](#deployment).
@@ -337,31 +342,28 @@ hosted is in [Deployment](#deployment).
    cd subastas_analytics
    ```
 
-3. **Add the local database.** Copy the Docker Compose file that adds a
-   Postgres container, and its env file, then choose a password in
-   `subastas-db.env`:
+3. **Add the database** and set its password in `subastas-db.env`:
 
    ```bash
    cp docker-compose.override.yml.example docker-compose.override.yml
    cp subastas-db.env.example subastas-db.env
    ```
 
-4. **Create the env file** and fill in the password of `subastas-db.env` in
-   `AIRFLOW_CONN_SUBASTAS_DB`, and the API keys:
+4. **Create the env file** and fill in its values:
 
    ```bash
    cp .env.example .env
    ```
 
-5. **Start Airflow** and the database:
+5. **Start Airflow** and the database. First, set `start_date` in
+   `dags/subastas_pipeline.py` to a recent date: the DAG starts unpaused and
+   runs once for every Monday since then, and each run costs API credits.
 
    ```bash
    astro dev start
    ```
 
-   The Airflow UI is at <http://localhost:8081>. The DAG starts unpaused and, because of `catchup=True`, runs once
-   for every Monday since its `start_date`. Each run sends the new
-   announcements to Claude, so it costs API credits.
+   The Airflow UI is at <http://localhost:8081>.
 
 6. **Create the app schema and the database user `subastas_app`**, once,
    after the first DAG run has finished (the user reads the gold tables, so
@@ -377,26 +379,16 @@ hosted is in [Deployment](#deployment).
    The last command asks for the password of `subastas_app`.
 
 7. **Run the app.**
-   1. Install the R version in `dashboard/renv.lock` (`"R": {"Version": ...}`).
-      With [rig](https://github.com/r-lib/rig) you can install it next to the
-      ones you already have:
-
-      ```bash
-      rig add <version>
-      ```
-
-      If you have several R versions, choose this one in RStudio, in Tools →
-      Global Options → General.
-   2. Copy `dashboard/.Renviron.example` to `dashboard/.Renviron` and fill in
+   1. Copy `dashboard/.Renviron.example` to `dashboard/.Renviron` and fill in
       the password of `subastas_app`.
-   3. Open `dashboard/dashboard.Rproj` in RStudio, or start R from the
+   2. Open `dashboard/dashboard.Rproj` in RStudio, or start R from the
       `dashboard` folder, and install the R packages:
 
       ```r
       renv::restore()
       ```
 
-   4. Add the people who will log in to the app. Each one gets their own
+   3. Add the people who will log in to the app. Each one gets their own
       notes. Make the hash of their password in R. It asks for the password
       without showing it, and prints a long text that starts with `$7$`:
 
@@ -412,7 +404,7 @@ hosted is in [Deployment](#deployment).
       INSERT INTO app.users (username, password_hash) VALUES ('<name>', '<hash>');
       ```
 
-   5. Start the app:
+   4. Start the app:
 
       ```r
       shiny::runApp()
