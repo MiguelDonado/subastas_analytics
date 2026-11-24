@@ -18,3 +18,11 @@ airflow.db
 airflow.cfg
 .env.*
 subastas-db.env.*
+
+# Large folders the Airflow image doesn't use
+assets
+dashboard
+docs
+data_modeling
+tests
+.pytest_cache

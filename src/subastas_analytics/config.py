@@ -18,6 +18,9 @@ SQL_DIR = Path("/usr/local/airflow/include/sql")
 # Template string: str.format() replaces it with the value of the keyword argument that has the same name
 BOE_SUMARIO_ENDPOINT = "https://www.boe.es/datosabiertos/api/boe/sumario/{fecha}"
 
+# The announcement as a web page, to read it (source_url in the tables is the XML)
+BOE_ANNOUNCEMENT_PAGE = "https://www.boe.es/diario_boe/txt.php?id={boe_ref}"
+
 # Regex: \b: returns a match where the characters are at beginning or end of a word
 AUCTION_TITLE_RE = re.compile(
     r"Delegaci[oó]n (Especial )?de Econom[ií]a y Hacienda.*\bsubasta",

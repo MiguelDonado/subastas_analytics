@@ -23,6 +23,7 @@ import requests
 from ..clients.goolzoom import CatastroInfo, lookup_reference, normalize_reference
 from ..clients.healthchecks import ping_failure
 from ..clients.llm import PROMPT_HASH, Announcement, extract_info_announcement
+from ..config import BOE_ANNOUNCEMENT_PAGE
 from .common import read_sql
 
 logger = logging.getLogger(__name__)
@@ -238,6 +239,7 @@ def load_silver(conn) -> dict:
 
         for pending_auction in pending_auctions:
             boe_ref = pending_auction["boe_ref"]
+            page_url = BOE_ANNOUNCEMENT_PAGE.format(boe_ref=boe_ref)
             # Reset on every announcement: if it fails before Claude answers, the failure is recorded with
             # no model, instead of the one left over from the previous announcement
             extraction_model = None
@@ -253,7 +255,7 @@ def load_silver(conn) -> dict:
                 # Fail it if it has no offer deadline
                 ######################################
                 if announcement.offer_deadline is None:
-                    logger.error("FAILED %s: the announcement has no offer deadline", boe_ref)
+                    logger.error("FAILED %s: the announcement has no offer deadline. See %s", boe_ref, page_url)
                     _record_failure(cursor, pending_auction, "No offer deadline", extraction_model)
                     conn.commit()
                     failed.append(boe_ref)
@@ -263,8 +265,8 @@ def load_silver(conn) -> dict:
                 # Fail it if the offer deadline is before the publication date
                 ######################################
                 if announcement.offer_deadline < pending_auction["publication_date"]:
-                    logger.error("FAILED %s: offer deadline %s is before publication date %s",
-                                boe_ref, announcement.offer_deadline, pending_auction["publication_date"])
+                    logger.error("FAILED %s: offer deadline %s is before publication date %s. See %s",
+                                boe_ref, announcement.offer_deadline, pending_auction["publication_date"], page_url)
                     _record_failure(cursor, pending_auction, "Offer deadline before publication date", extraction_model)
                     conn.commit()
                     failed.append(boe_ref)
@@ -279,8 +281,8 @@ def load_silver(conn) -> dict:
                 # Fail it if it has no valid lots
                 ######################################
                 if not stored:
-                    logger.error("FAILED %s: no valid lots (Claude found %d)",
-                                 boe_ref, len(announcement.lots))
+                    logger.error("FAILED %s: no valid lots (Claude found %d). See %s",
+                                 boe_ref, len(announcement.lots), page_url)
                     _record_failure(cursor, pending_auction, "No valid lots", extraction_model)
                     conn.commit()
                     failed.append(boe_ref)
@@ -329,7 +331,7 @@ def load_silver(conn) -> dict:
                 # Discards the half-stored announcement, then records the failure in a new transaction
                 conn.rollback()
                 # Logs the message with the full error traceback
-                logger.exception("FAILED %s: nothing stored for this announcement", boe_ref)
+                logger.exception("FAILED %s: nothing stored for this announcement. See %s", boe_ref, page_url)
                 _record_failure(cursor, pending_auction, f"{type(error).__name__}: {error}", extraction_model)
                 conn.commit()
                 failed.append(boe_ref)
