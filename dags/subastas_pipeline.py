@@ -75,7 +75,7 @@ from subastas_analytics.clients.boe import (
 )
 from subastas_analytics.clients.healthchecks import ping_failure
 from subastas_analytics.clients.llm import is_auction_title
-from subastas_analytics.config import SQL_DIR
+from subastas_analytics.config import BOE_ANNOUNCEMENT_PAGE, SQL_DIR
 from subastas_analytics.loaders.bronze import insert_auctions, stored_boe_refs
 from subastas_analytics.loaders.silver import load_silver
 
@@ -259,6 +259,15 @@ def subastas_pipeline():
             # A retry wouldn't help: the failed ones are already recorded in failed_announcements, so it
             # wouldn't find them pending. It would succeed, and the alert would never be sent
             if result["failed"]:
+                # What to do with each one: see "Failed announcements with no fix are marked as reviewed" in docs/2.data_modelling.md
+                for boe_ref in result["failed"]:
+                    print(
+                        f"FAILED {boe_ref}: {BOE_ANNOUNCEMENT_PAGE.format(boe_ref=boe_ref)}\n"
+                        f"  If it can't be fixed, mark it as reviewed:\n"
+                        f"    UPDATE silver.failed_announcements SET reviewed_at = now(), review_note = '<what you found>' WHERE boe_ref = '{boe_ref}';\n"
+                        f"  If you fixed the cause, delete it so it runs again on the next run:\n"
+                        f"    DELETE FROM silver.failed_announcements WHERE boe_ref = '{boe_ref}';"
+                    )
                 raise AirflowFailException(f"Announcements that failed: {result['failed']}")
 
         create_tables >> transform_auctions()
